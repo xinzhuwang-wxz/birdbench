@@ -75,6 +75,15 @@ def parse_prediction(text: str) -> SpeciesPrediction | None:
             return SpeciesPrediction.model_validate(json.loads(candidate))
         except Exception:
             continue
+    # 末层：json_repair 补全截断/损坏 JSON（V1-1b，救 Qwen 截断）；仍过 Pydantic 校验
+    try:
+        from json_repair import repair_json
+
+        obj = repair_json(text, return_objects=True)
+        if isinstance(obj, dict):
+            return SpeciesPrediction.model_validate(obj)
+    except Exception:
+        pass
     return None
 
 

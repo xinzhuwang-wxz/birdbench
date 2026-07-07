@@ -80,6 +80,16 @@ async def test_predict_abstain_passthrough():
     assert out.prediction.abstain is True and out.prediction.abstain_reason == "not_a_bird"
 
 
+def test_parse_truncated_json_repaired():
+    # Qwen 截断的 JSON（末尾被切）→ json_repair 补全 → 校验（V1-1b）
+    truncated = (
+        '{"predictions":[{"common_name":"Rock Pigeon","scientific_name":"Columba livia",'
+        '"rank_hint":"species","confidence":0.98,"'
+    )
+    p = parse_prediction(truncated)
+    assert p is not None and p.predictions[0].common_name == "Rock Pigeon"
+
+
 def test_parse_prediction_prose_with_braces_before_json():
     # 散文里有花括号在 JSON 之前 → 围栏抽取兜住（硬化）
     text = "Use format {x}. ```json\n" + _VALID + "\n```"
