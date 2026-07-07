@@ -13,6 +13,7 @@ from pathlib import Path
 
 from birdbench.schemas import LeaderboardRow, PredictionRecord
 from birdbench.score import ItemScore, aggregate
+from birdbench.stats import clopper_pearson, not_sig_diff_from, pairwise_mcnemar
 
 
 def load_predictions(path: str | Path) -> list[PredictionRecord]:
@@ -65,12 +66,17 @@ def build_leaderboard(records: list[PredictionRecord]) -> list[LeaderboardRow]:
         costs = [r.cost_usd for r in recs if r.cost_usd is not None]
         a_count = agg.get("buckets", {}).get("A", 0)
         lat = [r.latency_ms for r in recs]
+        n_scored = len(scored)
+        k_top1 = sum(1 for r in scored if r.scores.get("top1"))
+        ci_lo, ci_hi = clopper_pearson(k_top1, n_scored)
         rows.append(
             LeaderboardRow(
                 model_alias=alias,
                 prompt_version=pver,
                 n=agg.get("n", 0),
                 top1_species_acc=agg.get("top1_species_acc", 0.0),
+                top1_ci_low=ci_lo,
+                top1_ci_high=ci_hi,
                 top3_species_acc=agg.get("top3_species_acc", 0.0),
                 top5_species_acc=agg.get("top5_species_acc", 0.0),
                 genus_acc=agg.get("genus_acc", 0.0),
@@ -132,11 +138,20 @@ _COLS = [
 def render_html(rows: list[LeaderboardRow], *, title: str = "birdbench leaderboard") -> str:
     def cell(r: LeaderboardRow, key: str) -> str:
         v = getattr(r, key)
+        if key == "model_alias":
+            return str(v) + (" ★" if r.tied_with_best else "")
+        if key == "top1_species_acc":
+            return f"{v:.3f} [{r.top1_ci_low:.2f}–{r.top1_ci_high:.2f}]"
         if v is None:
             return "unpriced"
         if isinstance(v, float):
             return f"{v:.3f}" if key != "cost_per_item_usd" else f"{v:.5f}"
         return str(v)
+
+    note = (
+        "<p>★ = 与最优模型 top-1 <b>无显著差异</b>（McNemar 精确检验 + Holm 校正）→ 并列。"
+        "top1 带 Clopper-Pearson 95% CI。小样本下 CI 重叠 / ★ 者视为并列，勿按微小 delta 排名。</p>"
+    )
 
     head = "".join(f"<th>{html.escape(lbl)}</th>" for _, lbl in _COLS)
     body = "".join(
@@ -150,12 +165,30 @@ def render_html(rows: list[LeaderboardRow], *, title: str = "birdbench leaderboa
         "td:nth-child(2),th:nth-child(2){text-align:left}h2{margin-top:24px}</style>"
         f"<h1>{html.escape(title)}</h1>"
         f"<h2>成本 × 准确率 (Pareto)</h2>{_pareto_svg(rows)}"
-        f"<h2>Leaderboard（按端到端准确率）</h2><table><tr>{head}</tr>{body}</table>"
+        f"<h2>Leaderboard（按端到端准确率）</h2>{note}<table><tr>{head}</tr>{body}</table>"
     )
+
+
+def compute_significance(records: list[PredictionRecord], rows: list[LeaderboardRow]) -> set[str]:
+    """McNemar 精确 + Holm → 与最优模型 top-1 无显著差异的并列簇（防排行榜幻觉）。"""
+    from collections import defaultdict
+
+    if not rows:
+        return set()
+    correct: dict[str, dict[str, bool]] = defaultdict(dict)
+    for r in records:
+        if r.scores:
+            correct[r.model_alias][r.item_id] = bool(r.scores.get("top1"))
+    if len(correct) < 2:
+        return {rows[0].model_alias}
+    return not_sig_diff_from(rows[0].model_alias, pairwise_mcnemar(dict(correct)))
 
 
 def write_report(records: list[PredictionRecord], out_path: str | Path) -> list[LeaderboardRow]:
     rows = build_leaderboard(records)
+    tied = compute_significance(records, rows)
+    for r in rows:
+        r.tied_with_best = r.model_alias in tied
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(render_html(rows))

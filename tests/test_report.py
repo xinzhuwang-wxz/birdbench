@@ -51,6 +51,20 @@ def test_render_html_selfcontained():
     assert "<!doctype html>" in h and "m1" in h and "Leaderboard" in h and "<svg" in h
 
 
+def test_significance_and_ci(tmp_path):
+    # good 全对 vs bad 全错（同 12 图）→ McNemar 显著 → bad 不并列；rows 带 Clopper-Pearson CI
+    recs = [_rec("good", f"i{k}", "A", True, 0.001) for k in range(12)]
+    recs += [_rec("bad", f"i{k}", "B", False, 0.001, lca=0.0) for k in range(12)]
+    rows = write_report(recs, tmp_path / "r.html")
+    top = rows[0]
+    assert top.model_alias == "good"
+    assert top.top1_ci_low <= top.top1_species_acc <= top.top1_ci_high
+    assert top.tied_with_best is True
+    bad = next(r for r in rows if r.model_alias == "bad")
+    assert bad.tied_with_best is False  # 与最优显著不同
+    assert "★" in (tmp_path / "r.html").read_text()
+
+
 def test_write_report_unpriced(tmp_path):
     rows = write_report([_rec("m1", "i1", "A", True, None)], tmp_path / "report.html")
     assert (tmp_path / "report.html").exists()

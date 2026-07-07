@@ -15,6 +15,7 @@ dependencies = [
     "rich>=13",              # 终端榜
     "rapidfuzz>=3",          # 受限模糊匹配（解析阶 6）
     "json-repair>=0.30",     # 截断/损坏 JSON 兜底（V1-1b）
+    "scipy>=1.11",           # McNemar 精确检验 + Clopper-Pearson CI（V1-2）
     # gnparser: 学名归一化（解析阶 0）。确切 PyPI 包名/绑定在 S3 敲定（gnparser 二进制 / pygnparser）。
 ]
 

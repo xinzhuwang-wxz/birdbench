@@ -179,6 +179,9 @@ class LeaderboardRow(BaseModel):
     n: int = 0
     rank: int = 0
     top1_species_acc: float = 0.0
+    top1_ci_low: float = 0.0  # Clopper-Pearson 95% CI（V1-2）
+    top1_ci_high: float = 0.0
+    tied_with_best: bool = False  # 与最优模型无显著差异（Holm 校正后）
     top3_species_acc: float = 0.0
     top5_species_acc: float = 0.0
     genus_acc: float = 0.0
