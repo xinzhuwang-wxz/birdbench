@@ -115,6 +115,35 @@
 - **结构化 mode per-model**：默认 `TOOLS`/`JSON_SCHEMA`；LongCat / Qwen-`-thinking` / 不确定家降级 **`MD_JSON`**；**永不给 Qwen-thinking 发 json_schema**；Gemini 视觉+结构化走原生 `response_schema`。
 - **供应链**：pin 依赖版本 + hash（LiteLLM 曾被投毒）。
 
+**模型注册表（一家可测多模型 — 一等概念）**：评测单元是**模型条目**，不是"家"。一个 provider 下可挂**任意多个模型，共享同一把 API key**（key 是 per-provider，模型是 per-entry）。用一份 `models.toml` 注册：
+```toml
+[[model]]                        # 同一家可有多条
+alias = "gpt-4o"
+litellm = "openai/gpt-4o"        # LiteLLM id（前缀 = 路由到哪家）
+provider = "openai"              # 决定用哪把 key + 限流组
+[model.params]
+temperature = 0
+max_tokens = 1024
+structured_mode = "json_schema"  # per-model：TOOLS|JSON_SCHEMA|JSON_OBJECT|MD_JSON
+
+[[model]]
+alias = "gpt-4.1-mini"
+litellm = "openai/gpt-4.1-mini"
+provider = "openai"              # 同家、共用 OPENAI_API_KEY
+
+[[model]]
+alias = "qwen3-vl-plus"
+litellm = "dashscope/qwen3-vl-plus"
+provider = "dashscope"
+[model.params]
+structured_mode = "json_object"  # 非 thinking 版
+```
+- `Router.model_list` 从注册表构建：**每条 = 一个 deployment**，带各自 rpm/tpm/structured_mode/价格 overlay。
+- `ModelSpec`（schema）= 一个模型条目；一次 run 携带 `list[ModelSpec]`，**可含同家多条**。
+- CLI `--models gpt-4o,gpt-4.1-mini,qwen3-vl-plus` 按 **alias** 选子集；榜按 **alias** 排行（不是按 provider）；`cost_usd`/延迟/准确率**逐模型**统计。
+
+下表是**家级**能力约束（编码/JSON/定价），同家所有模型共享：
+
 **Provider × 能力矩阵**（facet B 调研，v0 接入）：
 
 | 家 | 视觉模型 | LiteLLM 前缀 | 图编码 | JSON | 内置价 |
