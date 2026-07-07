@@ -24,9 +24,9 @@ _INDEXED_CATEGORIES = frozenset({"species", "issf"})
 
 
 def normalize(s: str) -> str:
-    """归一化：小写、撇号直接去掉（不留空格）、其余非字母数字→空格、压空白。"""
+    """归一化：小写、撇号直接去掉、其余标点→空格、压空白。保留 unicode 词字符（中文名不被删）。"""
     s = s.lower().replace("'", "").replace("’", "")
-    s = re.sub(r"[^a-z0-9 ]", " ", s)
+    s = re.sub(r"[^\w ]", " ", s, flags=re.UNICODE)
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -47,11 +47,13 @@ class Registry:
         rollup: dict[str, str],
         com_index: dict[str, set[str]],
         sci_index: dict[str, set[str]],
+        code_alias: dict[str, set[str]] | None = None,
     ) -> None:
         self.species = species
         self.rollup = rollup
         self._com = com_index
         self._sci = sci_index
+        self._code_alias = code_alias or {}  # norm(4字母码) → set[code]（唯一命中才认）
 
     def resolve_to_species(self, code: str) -> str:
         """把任意 code（含 issf 细码）收敛到种码（rollup 后处理）。"""
@@ -77,6 +79,10 @@ class Registry:
     def exact_scientific(self, name: str) -> tuple[str | None, bool]:
         """学名 → (种码, ambiguous)。"""
         return self._exact(self._sci, name)
+
+    def by_code_alias(self, token: str) -> tuple[str | None, bool]:
+        """4 字母缩写码(com/sciNameCodes) → (种码, ambiguous)。多义(CACA→21 种)→ 弃答。"""
+        return self._exact(self._code_alias, token)
 
 
 def load_registry(
@@ -105,6 +111,7 @@ def load_registry(
 
     com: dict[str, set[str]] = {}
     sci: dict[str, set[str]] = {}
+    code_alias: dict[str, set[str]] = {}
     with raw_path.open() as f:
         for line in f:
             r = json.loads(line)
@@ -115,5 +122,7 @@ def load_registry(
                 com.setdefault(normalize(r["comName"]), set()).add(code)
             if r.get("sciName"):
                 sci.setdefault(normalize(r["sciName"]), set()).add(code)
+            for tok in (*r.get("comNameCodes", []), *r.get("sciNameCodes", [])):
+                code_alias.setdefault(normalize(tok), set()).add(code)
 
-    return Registry(species, rollup, com, sci)
+    return Registry(species, rollup, com, sci, code_alias)
