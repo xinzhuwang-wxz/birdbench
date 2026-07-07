@@ -1,0 +1,32 @@
+[
+  {
+    "alias": "doubao-lite-nothink",
+    "model_id": "volcengine/doubao-seed-2-0-lite-260428",
+    "provider": "volcengine",
+    "params": {"temperature": 0, "extra_body": {"thinking": {"type": "disabled"}}}
+  },
+  {
+    "alias": "doubao-lite-think",
+    "model_id": "volcengine/doubao-seed-2-0-lite-260428",
+    "provider": "volcengine",
+    "params": {"temperature": 0, "extra_body": {"thinking": {"type": "enabled"}}}
+  },
+  {
+    "alias": "qwen3-vl-plus",
+    "model_id": "dashscope/qwen3-vl-plus",
+    "provider": "dashscope",
+    "params": {"temperature": 0}
+  },
+  {
+    "alias": "qwen3-vl-plus-t0.8",
+    "model_id": "dashscope/qwen3-vl-plus",
+    "provider": "dashscope",
+    "params": {"temperature": 0.8}
+  },
+  {
+    "alias": "qwen3-vl-flash",
+    "model_id": "dashscope/qwen3-vl-flash",
+    "provider": "dashscope",
+    "params": {"temperature": 0}
+  }
+]
