@@ -70,7 +70,7 @@ def test_aggregate_buckets_and_two_accuracies():
         score_item("a", [], True, REG),  # D
     ]
     agg = aggregate(scores)
-    assert agg["buckets"] == {"A": 1, "B": 1, "C1": 1, "D": 1}
+    assert agg["buckets"] == {"A": 1, "B": 1, "C1": 1, "C2": 0, "D": 1}
     assert agg["top1_species_acc"] == 0.25
     assert agg["abstain_rate"] == 0.25
     assert abs(agg["parse_fail_rate"] - 1 / 3) < 1e-9  # C1/非弃答
