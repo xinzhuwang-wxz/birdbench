@@ -70,3 +70,18 @@ async def test_predict_garbage_schema_invalid():
     out = await predict(b"img", _SPEC, gateway=gw)
     assert out.schema_valid is False and out.prediction is None
     assert out.raw_output == "no json here"
+
+
+async def test_predict_abstain_passthrough():
+    payload = '{"predictions":[],"abstain":true,"abstain_reason":"not_a_bird"}'
+    gw = FakeGateway(responses={"m": payload})
+    out = await predict(b"img", _SPEC, gateway=gw)
+    assert out.schema_valid is True
+    assert out.prediction.abstain is True and out.prediction.abstain_reason == "not_a_bird"
+
+
+def test_parse_prediction_prose_with_braces_before_json():
+    # 散文里有花括号在 JSON 之前 → 围栏抽取兜住（硬化）
+    text = "Use format {x}. ```json\n" + _VALID + "\n```"
+    p = parse_prediction(text)
+    assert p is not None and p.predictions[0].common_name == "Cooper's Hawk"

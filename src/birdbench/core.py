@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from birdbench.gateway import Gateway, ModelResponse, image_part, text_part
@@ -42,17 +44,26 @@ def default_prompt() -> PromptSpec:
     )
 
 
+def _json_candidates(text: str) -> Iterator[str]:
+    yield text  # 1) 整体（干净 JSON）
+    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)  # 2) markdown 围栏内
+    if m:
+        yield m.group(1)
+    start, end = text.find("{"), text.rfind("}")  # 3) 首 { 到末 }
+    if start != -1 and end > start:
+        yield text[start : end + 1]
+
+
 def parse_prediction(text: str) -> SpeciesPrediction | None:
-    """容错解析：取第一个 {...} JSON 对象（兼容 markdown 围栏/前后缀散文）→ 校验。失败→None。"""
+    """容错解析：整体→围栏→花括号 逐一试校验。失败→None（安全，绝不误判）。"""
     if not text:
         return None
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end <= start:
-        return None
-    try:
-        return SpeciesPrediction.model_validate(json.loads(text[start : end + 1]))
-    except Exception:
-        return None
+    for candidate in _json_candidates(text):
+        try:
+            return SpeciesPrediction.model_validate(json.loads(candidate))
+        except Exception:
+            continue
+    return None
 
 
 def build_messages(

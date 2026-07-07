@@ -32,6 +32,7 @@ def test_lca_score():
     assert lca_score(0) == 1.0
     assert lca_score(1) == 0.75
     assert lca_score(2) == 0.5
+    assert lca_score(3) == 0.25
     assert lca_score(4) == 0.0
     assert lca_score(None) == 0.0
 

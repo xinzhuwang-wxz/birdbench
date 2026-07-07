@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from birdbench.registry import Registry
+from birdbench.schemas import ResolutionBucket
 
 _D = 4  # 树最大高度（种→根≈目层），LCA 部分分归一化用
 
@@ -36,7 +37,7 @@ def lca_score(dist: int | None) -> float:
 
 @dataclass
 class ItemScore:
-    bucket: str  # A | B | C1 | D
+    bucket: ResolutionBucket  # A | B | C1 | C2 | D
     top1_correct: bool = False
     top3_correct: bool = False
     top5_correct: bool = False
@@ -88,7 +89,7 @@ def aggregate(scores: list[ItemScore]) -> dict:
     n = len(scores)
     if n == 0:
         return {"n": 0}
-    b = {"A": 0, "B": 0, "C1": 0, "D": 0}
+    b = {"A": 0, "B": 0, "C1": 0, "C2": 0, "D": 0}
     for s in scores:
         b[s.bucket] = b.get(s.bucket, 0) + 1
     non_abstain = n - b["D"]
@@ -110,7 +111,7 @@ def aggregate(scores: list[ItemScore]) -> dict:
         "lca_score": sum(s.lca for s in scores) / n,
         "mistake_severity": (sum(mistakes) / len(mistakes)) if mistakes else 0.0,
         "abstain_rate": b["D"] / n,
-        "parse_fail_rate": (b["C1"] / non_abstain) if non_abstain else 0.0,
+        "parse_fail_rate": ((b["C1"] + b["C2"]) / non_abstain) if non_abstain else 0.0,
         "resolver_conditional_acc": (b["A"] / resolved) if resolved else 0.0,
         "end_to_end_acc": (b["A"] / non_abstain) if non_abstain else 0.0,
     }
