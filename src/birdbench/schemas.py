@@ -194,3 +194,40 @@ class LeaderboardRow(BaseModel):
     cost_per_item_usd: float | None = None
     cost_per_correct_usd: float | None = None
     total_tokens: int = 0
+
+
+# --- 产品端单图 identify（DESIGN §5.6 / S13）------------------------------
+class IdentifyCandidate(BaseModel):
+    common_name: str
+    scientific_name: str | None = None
+    rank_hint: RankHint = "species"
+    confidence: float = 0.0
+    species_code: str | None = None  # 解析出的码
+    resolution_stage: ResolutionStage | None = None
+
+
+class IdentifyResult(BaseModel):
+    """产品端「丢图看科属种」的一等输出（CLI 卡片/--json/v1 web 复用）。无 summary。"""
+
+    model_alias: str
+    abstain: bool = False
+    abstain_reason: AbstainReason | None = None
+    # top-1（科属种）
+    species_code: str | None = None
+    common_name: str | None = None
+    order: str = ""
+    family: str = ""
+    genus: str = ""
+    scientific_name: str = ""
+    resolution_stage: ResolutionStage | None = None
+    resolution_score: float = 0.0
+    ambiguous: bool = False
+    field_marks: str = ""
+    candidates: list[IdentifyCandidate] = Field(default_factory=list)  # top-k + hedge 透明度
+    # 成本/性能（横比各家 API 用）
+    cost_usd: float | None = None
+    latency_ms: float = 0.0
+    total_tokens: int = 0
+    model_resolved: str = ""
+    schema_valid: bool = True
+    raw_output: str = ""

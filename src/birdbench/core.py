@@ -13,7 +13,14 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from birdbench.gateway import Gateway, ModelResponse, image_part, text_part
-from birdbench.schemas import ModelSpec, PromptSpec, SpeciesPrediction
+from birdbench.registry import Registry
+from birdbench.schemas import (
+    IdentifyCandidate,
+    IdentifyResult,
+    ModelSpec,
+    PromptSpec,
+    SpeciesPrediction,
+)
 
 _DEFAULT_SYSTEM = (
     "You are an expert ornithologist. Identify the bird in the image and give your best "
@@ -106,3 +113,65 @@ async def predict(
     return PredictOutcome(
         prediction=pred, raw_output=resp.text, schema_valid=pred is not None, response=resp
     )
+
+
+async def identify(
+    image: bytes,
+    model: ModelSpec,
+    prompt: PromptSpec | None = None,
+    *,
+    gateway: Gateway,
+    registry: Registry,
+    gazetteer=None,
+    media_type: str = "image/jpeg",
+) -> IdentifyResult:
+    """图 → IdentifyResult（top-1 科属种 + top-k hedge + 解析透明度 + 成本）。产品端一等路径。"""
+    from birdbench.resolve import Gazetteer, resolve
+
+    gz = gazetteer or Gazetteer()
+    out = await predict(image, model, prompt, gateway=gateway, media_type=media_type)
+    r = out.response
+    res = IdentifyResult(
+        model_alias=model.alias,
+        cost_usd=r.cost_usd,
+        latency_ms=r.latency_ms,
+        total_tokens=r.usage.total_tokens,
+        model_resolved=r.model_resolved,
+        schema_valid=out.schema_valid,
+        raw_output=out.raw_output,
+    )
+    pred = out.prediction
+    if pred is None:
+        return res
+    if pred.abstain:
+        res.abstain, res.abstain_reason = True, pred.abstain_reason
+        return res
+
+    outcomes = []
+    for c in pred.predictions:
+        ro = resolve(c.common_name or c.scientific_name or "", registry, gz)
+        outcomes.append(ro)
+        res.candidates.append(
+            IdentifyCandidate(
+                common_name=c.common_name,
+                scientific_name=c.scientific_name,
+                rank_hint=c.rank_hint,
+                confidence=c.confidence,
+                species_code=ro.matched_species_code,
+                resolution_stage=ro.stage_fired,
+            )
+        )
+    if outcomes:
+        ro0, c0 = outcomes[0], pred.predictions[0]
+        res.common_name = c0.common_name
+        res.field_marks = c0.field_marks or ""
+        res.species_code = ro0.matched_species_code
+        res.resolution_stage = ro0.stage_fired
+        res.resolution_score = ro0.score
+        res.ambiguous = ro0.ambiguous
+        if ro0.matched_species_code:
+            tax = registry.taxonomy_of(ro0.matched_species_code)
+            if tax:
+                res.order, res.family = tax.order, tax.family_sci
+                res.genus, res.scientific_name = tax.genus, tax.sci_name
+    return res

@@ -97,5 +97,46 @@ def run_cmd(
     typer.echo(f"{len(recs)} cells → {out}")
 
 
+@app.command("identify")
+def identify_cmd(
+    image: Path,
+    model_id: str = typer.Option("openai/gpt-4o", "--model", help="litellm model id"),
+    alias: str = typer.Option("", "--alias"),
+    as_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """丢一张图 → 科属种 + top-k + 解析透明度 + 成本（产品端）。真机 LiteLLM（需 .env key）。"""
+    from birdbench.core import identify
+    from birdbench.gateway import LiteLLMGateway
+
+    media = {".png": "image/png", ".webp": "image/webp"}.get(image.suffix.lower(), "image/jpeg")
+    spec = ModelSpec(alias=alias or model_id, model_id=model_id, provider=model_id.split("/")[0])
+    res = asyncio.run(
+        identify(
+            image.read_bytes(),
+            spec,
+            gateway=LiteLLMGateway([spec]),
+            registry=load_registry(),
+            media_type=media,
+        )
+    )
+    if as_json:
+        typer.echo(res.model_dump_json(indent=2))
+        return
+    if res.abstain:
+        typer.echo(f"[{res.model_alias}] 弃答: {res.abstain_reason}")
+        return
+    typer.echo(f"[{res.model_alias}] {res.common_name}  ({res.species_code})")
+    typer.echo(f"  目/科/属/种: {res.order} / {res.family} / {res.genus} / {res.scientific_name}")
+    typer.echo(f"  解析: {res.resolution_stage} score={res.resolution_score:.2f}")
+    if res.field_marks:
+        typer.echo(f"  依据: {res.field_marks}")
+    for c in res.candidates[:5]:
+        typer.echo(f"    - {c.common_name} [{c.rank_hint}] conf={c.confidence} → {c.species_code}")
+    typer.echo(
+        f"  成本 ${res.cost_usd} · 延迟 {res.latency_ms:.0f}ms · tokens {res.total_tokens} · "
+        f"model={res.model_resolved}"
+    )
+
+
 if __name__ == "__main__":
     app()
