@@ -164,6 +164,17 @@ structured_mode = "json_object"  # 非 thinking 版
 - **交付 = 单 core + 两薄壳**：`core.predict()` 唯一模型 I/O；**Typer CLI**（可复现评测台，吃 JSONL manifest）+ **Gradio Web**（v1，拖拽多图/多选模型/结果表/导出）。**JSONL manifest**（非 CSV），CSV 仅人看榜导出。
 - **打包**：uv `[project.scripts]` + `.env`（pydantic-settings）；Docker 兜底。依赖闭包刻意最小。
 
+### 5.6 prompt 维度（一等评测轴 · 版本管理 · 可编辑）
+birdbench 一半是 **prompt engineering 平台**：prompt 与 model 并列，是**独立的评测轴**。
+
+- **评测单元 = `item × model × prompt`**（笛卡尔）。可对比 prompt-v0 vs v1 跨模型的影响：如"俗名 vs 俗名+学名"、"有无 CoT"、few-shot 与否、系统角色措辞。
+- **外部可编辑 prompt 文件**（面向同事）：`prompts/` 目录，一个版本一个文件，**纯文本/markdown，非技术同事直接改**。例：`prompts/species_id.v0.md`（含 `system` + `user` 模板 + 占位符如 `{image}`）。改 prompt = 改文件，不动代码。
+- **`PromptSpec` 契约**（进 `schemas.py`）：`name` · `version` · `system` · `user_template` · `params`(top_k / ask_scientific / cot:bool / few_shot) · **`content_hash`**（内容哈希 → 可复现、可缓存键）。
+- **可复现 + 可对比**：run 固定 `prompt_version` + `prompt_hash`；`PredictionRecord` / `LeaderboardRow` 增 `prompt_version`，`predictions.jsonl` 每行记录用了哪个 prompt；**榜可按 prompt 分组/两两对比**（McNemar 也可用于 prompt A/B）。prompt 从 `ModelSpec` 里独立出来（prompt 与 model 正交，不再埋在 model 条目里）。
+- **CLI**：`birdbench prompts`（列版本 + hash）；`birdbench run --models a,b --prompts v0,v1`（prompt 多选 = 加一个维度）。
+- **Web (v1)**：文本区**实时编辑 prompt** + 立即重跑；"另存为新版本"落 `prompts/`。这是同事最直接的 prompt 调优入口。
+- **默认 prompt v0** = §5.1 最佳实践（俗名为主 · answer-first · 无 CoT · top-k · abstain 通道）；CoT/学名等作为 v1、v2 变体做 A/B。
+
 ## 6. 评测集（v0 轻 → v2 严谨）
 - **v0**：~30 张手挑图（稀有 + 易混两维），`manifest.jsonl` 带 gold `speciesCode` + 授权字段。内部用 iNat CC-BY-NC 可；**对外再分发须降 CC0/CC-BY → 人审**（license 红线）。
 - **v2**：~150 图 / ~40 簇，2×2（稀有×易混）分层每格~35，组内铺开性别/年龄/色型；同属姊妹种 ∩ 混淆矩阵高混淆对；专家双确认 + 分歧仲裁；污染控制（post-cutoff + 剔公开集 + 私有 split）；attribution manifest。
