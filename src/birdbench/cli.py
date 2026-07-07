@@ -8,7 +8,6 @@ from pathlib import Path
 
 import typer
 
-from birdbench.core import default_prompt
 from birdbench.registry import load_registry
 from birdbench.resolve import resolve as resolve_name
 from birdbench.schemas import ModelSpec
@@ -48,9 +47,11 @@ def resolve_cmd(name: str) -> None:
 
 @app.command("prompts")
 def prompts_cmd() -> None:
-    """列出可用 prompt 版本（V0 内置；S12 外置到 prompts/）。"""
-    p = default_prompt()
-    typer.echo(f"{p.name}\t{p.version}\thash={p.content_hash}")
+    """列出可用 prompt 版本（prompts/ 目录，同事可编辑）。"""
+    from birdbench.prompts import list_prompts
+
+    for p in list_prompts():
+        typer.echo(f"{p.name}\t{p.version}\thash={p.content_hash}\t{p.params}")
 
 
 @app.command("report")

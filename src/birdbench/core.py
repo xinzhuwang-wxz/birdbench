@@ -32,7 +32,12 @@ _DEFAULT_USER = (
 
 
 def default_prompt() -> PromptSpec:
-    """V0 默认 prompt（§5.1 最佳实践）。S12 把它搬到 prompts/ 外部文件。"""
+    """V0 默认 prompt：优先读 prompts/species_id.v0.md（同事可编辑）；无文件则内置兜底。"""
+    from birdbench.prompts import load_prompt
+
+    loaded = load_prompt("species_id", "v0")
+    if loaded is not None:
+        return loaded
     body = _DEFAULT_SYSTEM + "\n" + _DEFAULT_USER
     return PromptSpec(
         name="species_id",
