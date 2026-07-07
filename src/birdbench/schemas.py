@@ -17,18 +17,25 @@ AbstainReason = Literal[
     "out_of_expertise",
     "not_a_bird",
 ]
+# 解析阶梯的阶（见 DESIGN §5.2）。CODE_ALIAS = 4 字母缩写码（唯一命中才认）；ZH_ALIAS = 中文名。
 ResolutionStage = Literal[
     "NORMALIZE",
     "EXACT_CODE",
     "EXACT_SCI",
     "EXACT_COM",
+    "ZH_ALIAS",
     "SYNONYM",
     "ROLLUP_SSP",
+    "CODE_ALIAS",
     "FUZZY_SCI",
     "EXTERNAL",
     "ABSTAIN",
 ]
+# 四桶分离（DESIGN §5.3）：A 解析对 / B 认错种(模型账) / C1 解析器覆盖漏洞 / C2 模型幻觉 / D 弃答。
+ResolutionBucket = Literal["A", "B", "C1", "C2", "D"]
 StructuredMode = Literal["TOOLS", "JSON_SCHEMA", "JSON_OBJECT", "MD_JSON"]
+GeoMode = Literal["blind", "aware"]
+HumanVerdict = Literal["confirm", "model_actually_right", "gold_wrong", "good_hard_case"]
 
 
 # --- VLM 输出（模型产出的结构化契约）---------------------------------------
@@ -51,32 +58,53 @@ class SpeciesPrediction(BaseModel):
     overall_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
-# --- 解析记账（区分模型账 vs 解析器账，见 DESIGN §5.3 四桶）----------------
+# --- prompt（一等评测轴，DESIGN §5.6）--------------------------------------
+class PromptSpec(BaseModel):
+    """外部可编辑、版本化的 prompt。content_hash 用于复现 + 缓存键。"""
+
+    name: str
+    version: str
+    content_hash: str = ""
+    system: str = ""
+    user_template: str = ""
+    params: dict = Field(default_factory=dict)  # top_k / ask_scientific / cot / few_shot / geo
+
+
+# --- 真值标签（typed，非裸 dict）-------------------------------------------
+class GoldLabel(BaseModel):
+    species_code: str
+    genus: str = ""
+    family: str = ""
+    order: str = ""
+
+
+# --- 解析记账（区分模型账 vs 解析器账，DESIGN §5.3 四桶）-------------------
 class ResolutionOutcome(BaseModel):
     """一次 名字→speciesCode 解析的确定性结局。"""
 
     raw_text: str
     parsed_canonical: str | None = None
-    stage_fired: ResolutionStage
+    stage_fired: ResolutionStage  # 哪一阶命中
     matched_species_code: str | None = None
-    match_type: ResolutionStage | None = None
-    score: float = 1.0
+    resolution_bucket: ResolutionBucket | None = None  # 相对 gold 的四桶归因（打分时填）
+    score: float = 1.0  # 解析置信度（阶越靠后越低）
     source: str | None = None
     candidates_considered: list[str] = Field(default_factory=list)
+    ambiguous: bool = False  # 归一化名映射到 >1 种码 → 弃答
     gold_species_code: str | None = None
 
 
 # --- 模型条目 / 用量 --------------------------------------------------------
 class ModelSpec(BaseModel):
-    """一个模型条目（一家可有多条，共享 key）。alias = 选择 / 排行键。"""
+    """一个模型条目（一家可有多条，共享 key）。alias = 选择 / 排行键。prompt 不在此（正交轴）。"""
 
     alias: str
     model_id: str  # litellm id, e.g. "openai/gpt-4o"
     provider: str
     params: dict = Field(default_factory=dict)
     structured_mode: StructuredMode = "JSON_SCHEMA"
-    prompt_version: str = "v0"
-    prompt_hash: str = ""
+    supports_vision: bool = True  # 能力声明；不支持则 runner 优雅跳过
+    supports_json_schema: bool = True
 
 
 class Usage(BaseModel):
@@ -87,15 +115,28 @@ class Usage(BaseModel):
     total_tokens: int = 0
 
 
+class HumanReview(BaseModel):
+    """数据飞轮 hook：同事在结果表上的人审/纠错，未来喂回评测集。"""
+
+    verdict: HumanVerdict | None = None
+    corrected_species_code: str | None = None
+    note: str = ""
+    reviewer: str = ""
+
+
 # --- 评测产物 ---------------------------------------------------------------
 class PredictionRecord(BaseModel):
-    """评测台一行 = 一个 (item × model)。predictions.jsonl 每行一条。"""
+    """评测台一行 = 一个实验单元 cell (item × model × prompt × sample)。predictions.jsonl 每行。"""
 
     run_id: str
-    model_alias: str
+    cell_id: str = ""  # 维度内容哈希 = 缓存键（DESIGN §5.5/§5.7）
     item_id: str
+    model_alias: str
+    prompt_version: str = "v0"  # prompt 轴（DESIGN §5.6）
+    prompt_hash: str = ""
+    sample_idx: int = 0  # 自洽采样维度（DESIGN §5.7 N3）
     image_sha256: str
-    expected: dict = Field(default_factory=dict)  # gold {species_code, ...}
+    gold: GoldLabel | None = None
     raw_output: str = ""
     prediction: SpeciesPrediction | None = None  # None => 结构化输出失败
     schema_valid: bool = False
@@ -104,9 +145,11 @@ class PredictionRecord(BaseModel):
     latency_ms: float = 0.0
     usage: Usage = Field(default_factory=Usage)
     cost_usd: float | None = None  # None => 不可定价（价格表缺）
+    model_resolved: str = ""  # API 实际返回的模型版本（钉快照，DESIGN §5.7 N5）
     cache_hit: bool = False
     attempt: int = 1
     error: str | None = None
+    human_review: HumanReview | None = None
     ts: datetime | None = None
 
 
@@ -123,15 +166,19 @@ class RunManifest(BaseModel):
     dataset_sha256: str = ""
     n_items: int = 0
     models: list[ModelSpec] = Field(default_factory=list)
+    prompts: list[PromptSpec] = Field(default_factory=list)  # prompt 也是评测轴
+    geo_mode: GeoMode = "blind"  # v0 默认盲测（DESIGN §6）
 
 
 class LeaderboardRow(BaseModel):
-    """榜的一行（按 model alias）。"""
+    """榜的一行（某个 groupby 视图，通常按 (model_alias, prompt_version)）。"""
 
     model_alias: str
-    n: int
+    prompt_version: str = "v0"
+    n: int = 0
     rank: int = 0
     top1_species_acc: float = 0.0
+    top3_species_acc: float = 0.0
     top5_species_acc: float = 0.0
     genus_acc: float = 0.0
     family_acc: float = 0.0
