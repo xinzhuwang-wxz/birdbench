@@ -169,6 +169,11 @@ structured_mode = "json_object"  # 非 thinking 版
 | GLM | glm-4v/4.5v/4.6v | `zai/` | url+base64 | response_format(VL 需实测) | ✅ |
 | LongCat | Flash-Omni | `openai/`+api_base | 契约待实测 | 未知 | ❌需overlay·实验位 |
 
+**真机验证（2026-07，Doubao + Qwen 已通端到端 text+vision）**：
+- **Doubao**（Ark `volcengine/`, `…/api/v3/chat/completions` + Bearer ARK_API_KEY）：OpenAI 图片格式 ✓；**图 ≥14px**；**seed 系默认推理**（连 lite 都烧 reasoning token，"Red" 花 167）；**图 token 偏贵**（16×16 吃 1337 prompt tokens）→ 评测须 **关思考 + 价格 overlay**，否则成本被拉高。
+- **Qwen**（`dashscope/`, 标准端点 `dashscope.aliyuncs.com/compatible-mode/v1`；`sk-ws-` key 无需 workspace 子域）：image_tokens 单列干净、无隐性推理。
+- 两家皆走 base64 data URL。密钥在 `.env`（gitignored）。
+
 ### 5.5 评测引擎与交付
 - **自己写 ~300 行 async map-reduce**（不引重框架；已有 LiteLLM 成本 + Instructor 校验）。**不用 LangGraph**（确定性单遍 map-reduce，纯 asyncio）。
 - **双缓存**：调用缓存（内容寻址 → 重跑免费）+ 打分缓存（改指标不重调）。
