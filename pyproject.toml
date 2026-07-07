@@ -1,0 +1,43 @@
+[project]
+name = "birdbench"
+version = "0.0.0"
+description = "多模型多模态 API · 鸟类开集物种识别评测台"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "xinzhuwang-wxz" }]
+dependencies = [
+    "litellm>=1.0",          # 多供应商网关 + Router + per-call 成本
+    "instructor>=1.0",       # 结构化解码（Pydantic 强制）
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "typer>=0.12",           # CLI
+    "rich>=13",              # 终端榜
+    "rapidfuzz>=3",          # 受限模糊匹配（解析阶 6）
+    # gnparser: 学名归一化（解析阶 0）。确切 PyPI 包名/绑定在 S3 敲定（gnparser 二进制 / pygnparser）。
+]
+
+[project.optional-dependencies]
+web = ["gradio>=6"]          # v1 拖拽台
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
+
+[project.scripts]
+birdbench = "birdbench.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/birdbench"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

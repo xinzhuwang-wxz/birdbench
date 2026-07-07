@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+
+# env / secrets
+.env
+.env.local
+
+# birdbench runtime
+runs/                    # 评测运行产物
+.cache/                  # 调用/打分双缓存
+data/evalset/images/     # 图片（授权各异，不进 git；manifest 保留）
+
+# tooling
+.pytest_cache/
+.ruff_cache/
+.DS_Store
