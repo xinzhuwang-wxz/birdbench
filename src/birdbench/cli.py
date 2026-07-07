@@ -53,6 +53,18 @@ def prompts_cmd() -> None:
     typer.echo(f"{p.name}\t{p.version}\thash={p.content_hash}")
 
 
+@app.command("report")
+def report_cmd(
+    predictions: Path,
+    out: Path = typer.Option(Path("runs/report.html"), "--out"),
+) -> None:
+    """从 predictions.jsonl 生成 HTML 榜 + leaderboard.json。"""
+    from birdbench.report import load_predictions, write_report
+
+    rows = write_report(load_predictions(predictions), out)
+    typer.echo(f"{len(rows)} models → {out}")
+
+
 @app.command("run")
 def run_cmd(
     manifest: Path,
