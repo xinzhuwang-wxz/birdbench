@@ -84,6 +84,24 @@ def test_code_alias_unique_success():
     assert r.stage_fired == "CODE_ALIAS" and r.matched_species_code is not None
 
 
+def test_modifier_strip_recovers_correct():
+    # 描述性修饰(括号/morph/albino…)打断精确匹配 → 剥掉回退 base 名（V1-1，恢复被冤枉的对答案）
+    assert _code("Northern Cardinal (yellow variant)") == "norcar"
+    assert _code("American Crow (leucistic individual)") == "amecro"
+    assert _code("Rock Pigeon (Feral Pigeon)") == "rocpig"
+    r = resolve("Northern Cardinal (yellow xanthochroic morph)", REG)
+    assert r.stage_fired == "MODIFIER_STRIP" and r.matched_species_code == "norcar"
+
+
+def test_modifier_strip_leading_word():
+    assert _code("Albino American Robin") == "amerob"  # 前缀 albino 剥掉 → American Robin
+
+
+def test_modifier_strip_no_overreach():
+    # 真·不同/含糊名不该被误剥成别的种 → 弃答不乱猜
+    assert resolve("Black Owl", REG).matched_species_code is None
+
+
 def test_hallucinated_name_abstains():
     r = resolve("Sparg de Cooper", REG)
     assert r.stage_fired == "ABSTAIN" and r.matched_species_code is None

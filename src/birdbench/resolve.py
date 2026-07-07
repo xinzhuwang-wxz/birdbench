@@ -23,6 +23,28 @@ except ImportError:  # pragma: no cover
     _HAS_RAPIDFUZZ = False
 
 _SP_RE = re.compile(r"\bsp\b")
+_PAREN_RE = re.compile(r"\([^)]*\)")
+# 描述性修饰词（V1-1）：模型常给 base 名附这些，打断精确匹配。剥掉回退 base 名。
+_MODIFIER_WORDS = frozenset({
+    "albino", "leucistic", "melanistic", "xanthochroic", "xanthochromic", "domestic",
+    "feral", "juvenile", "nestling", "immature", "subadult", "adult", "male", "female",
+    "morph", "variant", "individual", "breed", "form", "eclipse", "nonbreeding",
+    "breeding", "molting", "worn", "fledgling", "chick",
+})
+
+
+def _base_names(text: str) -> list[str]:
+    """从原文剥描述性修饰，产出 base 名候选（去括号 / 去修饰词），供回退精确匹配。"""
+    original = _canon(text)
+    out, seen = [], {original}
+    for variant in (_PAREN_RE.sub(" ", text), text):  # 先试去括号
+        c = _canon(variant)
+        stripped = " ".join(t for t in c.split() if t not in _MODIFIER_WORDS)
+        for cand in (c, stripped):
+            if cand and cand not in seen:
+                seen.add(cand)
+                out.append(cand)
+    return out
 
 
 @dataclass
@@ -126,6 +148,16 @@ def resolve(
                 return out(stage, code, score, source=stage.lower())
             if amb:
                 return out("ABSTAIN", None, 0.0, ambiguous=True)
+
+    # 4b MODIFIER_STRIP — 剥描述性修饰(括号/morph/albino…)回退 base 名（V1-1，恢复被冤枉的对答案）
+    for base in _base_names(text):
+        code, amb = registry.exact_common(base)
+        if not code and not amb:
+            code, amb = registry.exact_scientific(base)
+        if code:
+            return out("MODIFIER_STRIP", code, 0.9, source="modifier-strip")
+        if amb:
+            return out("ABSTAIN", None, 0.0, ambiguous=True)
 
     # 5a ROLLUP_SSP — 三名 → 二名 → 种
     parts = canon.split()

@@ -25,6 +25,7 @@ ResolutionStage = Literal[
     "EXACT_COM",
     "ZH_ALIAS",
     "SYNONYM",
+    "MODIFIER_STRIP",
     "ROLLUP_SSP",
     "CODE_ALIAS",
     "FUZZY_SCI",
