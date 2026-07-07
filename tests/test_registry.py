@@ -45,7 +45,7 @@ def test_unknown_name_unresolved():
 
 def test_index_invariant_only_species_and_issf():
     # 索引里每个 code 都必须能落到一个种（不含 slash/spuh/hybrid 等悬空码）
-    for index in (REG._com, REG._sci):
+    for index in (REG._com, REG._sci, REG._code_alias):
         for codes in index.values():
             for c in codes:
                 assert REG.taxonomy_of(c) is not None, f"index code {c} 落不到种"

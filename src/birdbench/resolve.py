@@ -2,9 +2,9 @@
 
 阶(V0)：NORMALIZE → EXACT_CODE(仅 speciesCode) → EXACT_SCI → EXACT_COM
 → ZH_ALIAS(gz) → SYNONYM(gz) → ROLLUP_SSP(三名→二名)
-→ FUZZY_SCI(rapidfuzz,属精确) → CODE_ALIAS(4字母,唯一) → ABSTAIN。
+→ FUZZY_SCI(JaroWinkler,属精确,margin,edit) → CODE_ALIAS(4字母,唯一) → ABSTAIN。
 rollup 后处理内建在 registry。stage-0 轻量归一化(gnparser 可后续硬化)。
-gazetteer(同义/中文) 默认空，S4 离线 build 填——本片不阻塞于 S4。
+gazetteer(同义/中文)集合值(多义→弃答)，默认空由 S4 填——本片不阻塞于 S4。
 """
 
 from __future__ import annotations
@@ -16,22 +16,21 @@ from birdbench.registry import Registry, normalize
 from birdbench.schemas import ResolutionOutcome
 
 try:
-    from rapidfuzz import fuzz
+    from rapidfuzz.distance import JaroWinkler, Levenshtein
 
     _HAS_RAPIDFUZZ = True
 except ImportError:  # pragma: no cover
     _HAS_RAPIDFUZZ = False
 
+_SP_RE = re.compile(r"\bsp\b")
+
 
 @dataclass
 class Gazetteer:
-    """S4 离线 build 填充：同义名 + 中文名 → 种码。默认空（本片不阻塞于 S4）。"""
+    """S4 离线 build 填：同义名 + 中文名 → 种码**集合**（多义→弃答，与 registry 一致）。默认空。"""
 
-    synonym: dict[str, str] = field(default_factory=dict)  # norm(学名/俗名) → speciesCode
-    zh: dict[str, str] = field(default_factory=dict)  # norm(中文名) → speciesCode
-
-
-_SP_RE = re.compile(r"\bsp\b")
+    synonym: dict[str, set[str]] = field(default_factory=dict)  # norm(学名/俗名) → {speciesCode}
+    zh: dict[str, set[str]] = field(default_factory=dict)  # norm(中文名) → {speciesCode}
 
 
 def _canon(text: str) -> str:
@@ -39,23 +38,39 @@ def _canon(text: str) -> str:
     return re.sub(r"\s+", " ", c).strip()
 
 
-def _fuzzy_sci(canon: str, reg: Registry, threshold: float) -> tuple[str, float] | None:
-    """属 token 精确、只模糊种加词的受限模糊（DESIGN §5.2 阶 5）。"""
+def _unique_species(reg: Registry, codes: set[str]) -> tuple[str | None, bool]:
+    """把候选码收敛到种；唯一→(种码, False)，多义→(None, True)。"""
+    species = {reg.resolve_to_species(c) for c in codes}
+    if len(species) == 1:
+        return next(iter(species)), False
+    return None, True
+
+
+def _fuzzy_sci(
+    canon: str, reg: Registry, jw_min: float, margin: float, max_edit: int
+) -> tuple[str, float] | None:
+    """属精确 + JaroWinkler≥jw_min + 次候选 margin + 编辑距离≤max_edit（DESIGN §5.2 阶 5）。"""
     if not _HAS_RAPIDFUZZ or " " not in canon:
         return None
     genus = canon.split()[0]
-    best_code, best_score = None, 0.0
+    scored: list[tuple[float, str, str]] = []
     for name, codes in reg._sci.items():
         if name.split()[0] != genus:  # 属必须精确
             continue
-        score = fuzz.ratio(canon, name)
-        if score > best_score:
-            species = {reg.resolve_to_species(c) for c in codes}
-            if len(species) == 1:
-                best_code, best_score = next(iter(species)), score
-    if best_code and best_score >= threshold:
-        return best_code, best_score / 100.0
-    return None
+        code, _ = _unique_species(reg, codes)
+        if code is None:  # 该名多义 → 不做 fuzzy 目标
+            continue
+        scored.append((JaroWinkler.similarity(canon, name), name, code))
+    if not scored:
+        return None
+    scored.sort(key=lambda t: t[0], reverse=True)
+    best_jw, best_name, best_code = scored[0]
+    second = scored[1][0] if len(scored) > 1 else 0.0
+    if best_jw < jw_min or best_jw - second < margin:  # 阈值 + margin 防近似种误配
+        return None
+    if Levenshtein.distance(canon, best_name) > max_edit:  # 编辑距离守卫
+        return None
+    return best_code, min(0.90, max(0.80, best_jw))  # 置信 clamp 到 spec 区间
 
 
 def resolve(
@@ -63,9 +78,11 @@ def resolve(
     registry: Registry,
     gazetteer: Gazetteer | None = None,
     *,
-    fuzzy_threshold: float = 92.0,
+    jw_min: float = 0.92,
+    fuzzy_margin: float = 0.05,
+    max_edit: int = 2,
 ) -> ResolutionOutcome:
-    """自由文本鸟名 → ResolutionOutcome（含命中阶、种码、置信、ambiguous）。"""
+    """自由文本鸟名 → ResolutionOutcome（命中阶、种码、置信、ambiguous）。"""
     gz = gazetteer or Gazetteer()
     canon = _canon(text)
 
@@ -80,8 +97,8 @@ def resolve(
             source=source,
         )
 
-    if not canon:
-        return out("ABSTAIN", None, 0.0)
+    if not canon:  # 空/乱码
+        return out("NORMALIZE", None, 0.0)
 
     # 1 EXACT_CODE — 仅 speciesCode（非 4 字母码）；issf 细码经 rollup
     if canon in registry.species:
@@ -89,7 +106,7 @@ def resolve(
     if canon in registry.rollup:
         return out("EXACT_CODE", registry.resolve_to_species(canon), 1.0, source="code+rollup")
 
-    # 2 EXACT_SCI / 3 EXACT_COM（含 ambiguous → 弃答）
+    # 2 EXACT_SCI / 3 EXACT_COM —— 传原文；exact_* 内部归一化，_canon 的去 "sp." 仅供后续阶
     for stage, fn, score in (
         ("EXACT_SCI", registry.exact_scientific, 1.0),
         ("EXACT_COM", registry.exact_common, 0.99),
@@ -100,21 +117,27 @@ def resolve(
         if amb:
             return out("ABSTAIN", None, 0.0, ambiguous=True)
 
-    # 3z ZH_ALIAS（中文名，测中文模型必需）/ 4 SYNONYM（旧属名/同义名）——gazetteer 由 S4 填
-    if canon in gz.zh:
-        return out("ZH_ALIAS", registry.resolve_to_species(gz.zh[canon]), 0.98, source="zh")
-    if canon in gz.synonym:
-        return out("SYNONYM", registry.resolve_to_species(gz.synonym[canon]), 0.97, source="gz")
+    # 3z ZH_ALIAS / 4 SYNONYM —— gazetteer 集合值，多义→弃答
+    for stage, mp, score in (("ZH_ALIAS", gz.zh, 0.98), ("SYNONYM", gz.synonym, 0.97)):
+        codes = mp.get(canon)
+        if codes:
+            code, amb = _unique_species(registry, codes)
+            if code:
+                return out(stage, code, score, source=stage.lower())
+            if amb:
+                return out("ABSTAIN", None, 0.0, ambiguous=True)
 
-    # 5a ROLLUP_SSP — 三名 → 二名 → 种（回退）
+    # 5a ROLLUP_SSP — 三名 → 二名 → 种
     parts = canon.split()
     if len(parts) >= 3:
-        code, _ = registry.exact_scientific(" ".join(parts[:2]))
+        code, amb = registry.exact_scientific(" ".join(parts[:2]))
         if code:
             return out("ROLLUP_SSP", code, 0.95, source="trinomial-strip")
+        if amb:
+            return out("ABSTAIN", None, 0.0, ambiguous=True)
 
-    # 5b FUZZY_SCI — 属精确、模糊种加词
-    fz = _fuzzy_sci(canon, registry, fuzzy_threshold)
+    # 5b FUZZY_SCI — 属精确、模糊种加词、margin/edit 守卫
+    fz = _fuzzy_sci(canon, registry, jw_min, fuzzy_margin, max_edit)
     if fz:
         return out("FUZZY_SCI", fz[0], fz[1], source="fuzzy")
 
