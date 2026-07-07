@@ -18,6 +18,7 @@
 | **S10** | v0 评测集 | 【坑B】~30 图（稀有 + 易混）；`manifest.jsonl` 带 gold speciesCode + 授权字段；license 备注（iNat CC-BY-NC 内部用）；污染初筛(post-cutoff) | **ready-for-human** |
 | **S11** | provider 矩阵 | openai/gemini/qwen-vl/豆包/grok/kimi/glm 接入(+longcat 实验位)，**每家可测多模型**（gpt-4o/4.1/5、qwen-vl-max/qwen3-vl…）；`.env.example` keys；各家各模型冒烟返回可解析 `Prediction`（需真 key + 花钱） | **ready-for-human** |
 | **S12** | prompt 注册表 | `prompts/` 外部版本化 prompt 文件（同事可改）；`PromptSpec`(schemas 追加：name/version/system/user_template/params/content_hash)；prompt 成**评测轴**（item×model×**prompt**）；`PredictionRecord`/`LeaderboardRow` 带 `prompt_version`，榜可按 prompt 对比；CLI `prompts` 列版本 + `run --prompts v0,v1`；默认 v0=§5.1 最佳实践 | ready-for-agent |
+| **S13** | 单图 identify 产品路径 | `identify(image,model,prompt)->IdentifyResult{prediction, species_code, 科属种, resolution, cost}` + `birdbench identify <img>`；产品端"丢一张图看科属种"一等路径（Web 复用）。V0 | ready-for-agent |
 
 ## v1 / v2（路线图，暂不开 issue）
 - **v1**：Gradio 拖拽壳 · 校准/弃答指标(AURC/ECE) · McNemar/CI · recoverable-miss 影子回收 · 在线解析兜底(阶 7)。
