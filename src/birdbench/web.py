@@ -15,7 +15,12 @@ from birdbench.gateway import FakeGateway, Gateway
 from birdbench.registry import Registry, load_registry
 from birdbench.schemas import ModelSpec
 
-_MODELS = ["fake/demo", "dashscope/qwen3-vl-plus", "volcengine/doubao-seed-2-0-lite-260428"]
+_MODELS = [
+    "fake/demo",
+    "dashscope/qwen3-vl-flash",
+    "dashscope/qwen3-vl-plus",
+    "volcengine/doubao-seed-2-0-lite-260428",
+]
 _DEMO_JSON = (
     '{"predictions":[{"common_name":"Northern Cardinal",'
     '"scientific_name":"Cardinalis cardinalis","rank_hint":"species","confidence":0.82,'
@@ -34,8 +39,22 @@ def _registry() -> Registry:
     return _reg
 
 
+# 已知真机模型的验证过参数（doubao 关 thinking 否则慢+包裹 JSON；温度 0）
+_PARAMS = {
+    "volcengine/doubao-seed-2-0-lite-260428": {
+        "temperature": 0,
+        "extra_body": {"thinking": {"type": "disabled"}},
+    },
+    "dashscope/qwen3-vl-plus": {"temperature": 0},
+    "dashscope/qwen3-vl-flash": {"temperature": 0},
+}
+
+
 def _gateway(model_id: str) -> tuple[Gateway, ModelSpec]:
-    spec = ModelSpec(alias=model_id, model_id=model_id, provider=model_id.split("/")[0])
+    spec = ModelSpec(
+        alias=model_id, model_id=model_id, provider=model_id.split("/")[0],
+        params=_PARAMS.get(model_id, {}),
+    )
     if model_id.startswith("fake") or os.environ.get("BIRDBENCH_REAL") != "1":
         return FakeGateway(responses={spec.alias: _DEMO_JSON}), spec
     from birdbench.gateway import LiteLLMGateway
