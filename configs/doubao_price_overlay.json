@@ -1,13 +1,25 @@
 {
-  "_note": "Doubao 无 litellm 内置价 → 自维护估算价(USD/token)。**估算值,需按火山方舟账单校准**。Qwen 用 litellm 内置价。",
+  "_note": "自维护价格表(USD/token)灌入 litellm。价源=各家官方现价(2026-07,≤32k 档)按汇率换算。litellm 对 doubao 及新 qwen3-vl 多无内置价 → 三个真机模型都在此登记。图像走 token 计费(usage 已含图像 token)。",
+  "_source_prices_cny_per_million_tokens": {
+    "doubao-seed-2.0-lite": {"input": 0.6, "output": 3.6, "cache_hit": 0.12},
+    "qwen3-vl-plus": {"input": 1.0, "output": 10.0},
+    "qwen3-vl-flash": {"input": 0.16, "output": 1.6}
+  },
+  "_exchange_rate_cny_per_usd": 7.15,
   "volcengine/doubao-seed-2-0-lite-260428": {
-    "input_cost_per_token": 1.1e-7,
-    "output_cost_per_token": 2.8e-7,
+    "input_cost_per_token": 8.392e-8,
+    "output_cost_per_token": 5.035e-7,
+    "cache_read_input_token_cost": 1.678e-8,
     "litellm_provider": "volcengine"
   },
-  "volcengine/doubao-seed-2-1-pro-260628": {
-    "input_cost_per_token": 4.0e-7,
-    "output_cost_per_token": 1.0e-6,
-    "litellm_provider": "volcengine"
+  "dashscope/qwen3-vl-plus": {
+    "input_cost_per_token": 1.399e-7,
+    "output_cost_per_token": 1.399e-6,
+    "litellm_provider": "dashscope"
+  },
+  "dashscope/qwen3-vl-flash": {
+    "input_cost_per_token": 2.238e-8,
+    "output_cost_per_token": 2.238e-7,
+    "litellm_provider": "dashscope"
   }
 }

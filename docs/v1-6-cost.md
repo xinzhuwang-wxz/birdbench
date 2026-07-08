@@ -1,0 +1,33 @@
+# V1-6 · 成本校准（官方现价 → 性价比榜）
+
+日期：2026-07-08。价源=各家官方现价（2026-07，≤32k 档），换算 7.15 CNY/USD。见 `configs/doubao_price_overlay.json`。
+
+## 官方现价（元/百万 tokens，≤32k）
+| 模型 | 输入 | 输出 | 缓存命中 |
+|---|---|---|---|
+| doubao-seed-2.0-lite | 0.6 | 3.6 | 0.12 |
+| qwen3-vl-plus | 1.0 | 10.0 | — |
+| qwen3-vl-flash | 0.16 | 1.6 | — |
+
+图像走 token 计费（API 的 usage 已含图像 token，litellm 按 per-token 乘）。
+
+## 修复：qwen3-vl-flash 之前 cost=$0
+litellm 无 qwen3-vl-flash 内置价 → v0 里它成本记成 0。overlay 现登记三个真机模型的真价 → 后续跑准确。
+
+## 校准后性价比（v0 真实 token 重算，n=26）
+| 模型 | 旧$ | 校准$ | 准确率 | $/正确ID |
+|---|---|---|---|---|
+| **doubao-lite-nothink** | 0.00608 | 0.00651 | **65.4%** | **$0.00038** 🏆 |
+| qwen3-vl-flash | 0.00000 | 0.00166 | 38.5% | $0.00017 |
+| doubao-lite-think | 0.01073 | 0.01487 | 65.4% | $0.00087 |
+| qwen3-vl-plus | 0.01779 | 0.01523 | 38.5% | $0.00152 |
+| qwen3-vl-plus-t0.8 | 0.01688 | 0.01443 | 34.6% | $0.00160 |
+
+## 发现
+1. **doubao-lite-nothink 完胜**：准确率最高 + 性价比优。
+2. **thinking 对细粒度识别纯浪费**：think 与 nothink 同 65.4%，成本 2.3×。
+3. **qwen-plus 不值**：相对 flash 同 38.5% 准确率，贵 9×/token。
+4. doubao(65%) >> qwen(38%)（本集）。
+
+## 诚实边界
+n=26 → 准确率差异**统计上未显著**（M2：全平打）。**成本数是硬的**（官方价×真实 token），**准确率排名是方向性的**——要 V1-7 扩集才有说服力。汇率会浮动，改 `_exchange_rate_cny_per_usd` 一处即可。
