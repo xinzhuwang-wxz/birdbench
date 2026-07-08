@@ -9,13 +9,12 @@ build/
 # env / secrets
 .env
 .env.local
-
 # birdbench runtime
 runs/                    # 评测运行产物
 .cache/                  # 调用/打分双缓存
 # data/evalset/images/ 进 git：v0 CC 图随私仓（CC-BY-NC 仅私仓内部；对外须换 CC0/CC-BY, v2）
-
 # tooling
 .pytest_cache/
 .ruff_cache/
 .DS_Store
+.venv-web/

@@ -114,12 +114,12 @@ def build_app():
             out_md = gr.Markdown(label="结果")
             headers = ["俗名", "rank_hint", "置信", "code"]
             out_tbl = gr.Dataframe(headers=headers, label="top-k 候选")
-            btn.click(identify_handler, [img, model], [out_md, out_tbl])
+            btn.click(identify_handler, [img, model], [out_md, out_tbl], api_name="identify")
         with gr.Tab("排行榜"):
             pred = gr.File(label="predictions.jsonl", file_types=[".jsonl"])
             lb_btn = gr.Button("生成排行榜", variant="primary")
             lb_html = gr.HTML()
-            lb_btn.click(leaderboard_handler, [pred], [lb_html])
+            lb_btn.click(leaderboard_handler, [pred], [lb_html], api_name="leaderboard")
     return demo
 
 
