@@ -15,21 +15,40 @@ def test_build_app_if_gradio():
 async def test_identify_handler_demo(tmp_path):
     p = tmp_path / "bird.jpg"
     p.write_bytes(b"img")
-    md, tbl = await identify_handler(str(p), "fake/demo")
+    md, tbl, trace = await identify_handler(str(p), "fake/demo")
     assert "Northern Cardinal" in md and "norcar" in md  # demo fake → 解析出科属种
     assert len(tbl) >= 1
+    # 完整 trace：模型最初输出 → 提取 → 逐阶解析（含具体信息）
+    assert "模型最初输出" in trace and "Northern Cardinal" in trace  # 原始输出
+    assert "提取的候选" in trace  # parse
+    assert "解析梯子" in trace and "EXACT_COM" in trace and "norcar" in trace  # 逐阶+结果
 
 
 async def test_identify_handler_no_image_no_crash():
-    md, tbl = await identify_handler(None, "fake/demo")
-    assert "请先上传" in md and tbl == []
+    md, tbl, trace = await identify_handler(None, "fake/demo")
+    assert "请先上传" in md and tbl == [] and trace == ""
 
 
 async def test_identify_handler_temp_thinking_pass_through(tmp_path):
     p = tmp_path / "bird.jpg"
     p.write_bytes(b"img")
-    md, _ = await identify_handler(str(p), "fake/demo", temperature=0.7, thinking=True)
-    assert "Northern Cardinal" in md  # 新参数不破坏路径
+    md, _, trace = await identify_handler(str(p), "fake/demo", temperature=0.7, thinking=True)
+    assert "Northern Cardinal" in md and "EXACT_COM" in trace  # 新参数不破坏路径
+
+
+def test_trace_resolve_steps():
+    from birdbench.registry import load_registry
+    from birdbench.resolve import trace_resolve
+
+    reg = load_registry()
+    steps, outcome = trace_resolve("Mallard", reg)
+    assert outcome.matched_species_code == "mallar3"
+    assert steps[0]["stage"] == "NORMALIZE" and steps[0]["result"] == "mallard"
+    fired = [s for s in steps if s["result"] == "mallar3"]
+    assert fired and fired[-1]["stage"] == "EXACT_COM"  # 命中阶 + 结果码正确
+    # 未命中的名 → 弃答，梯尾 ABSTAIN
+    steps2, out2 = trace_resolve("Domestic Duck", reg)
+    assert out2.matched_species_code is None and steps2[-1]["stage"] == "ABSTAIN"
 
 
 def test_gateway_temperature_and_thinking_wiring():

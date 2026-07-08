@@ -188,6 +188,42 @@ def resolve(
     return out("ABSTAIN", None, 0.0)
 
 
+_LADDER = [
+    "EXACT_CODE", "EXACT_SCI", "EXACT_COM", "ZH_ALIAS", "SYNONYM",
+    "MODIFIER_STRIP", "ROLLUP_SSP", "FUZZY_SCI", "CODE_ALIAS", "LLM_NORMALIZE", "ABSTAIN",
+]
+
+
+def trace_resolve(
+    text: str, registry: Registry, gazetteer: Gazetteer | None = None
+) -> tuple[list[dict], ResolutionOutcome]:
+    """解析梯子逐阶 trace（供 UI 透明展示）。以 resolve() 的 stage_fired 为权威，不重实现逻辑。
+
+    返回 (steps, outcome)。steps 每项 {stage, detail, result}：命中阶给出种码，之前的阶标未命中。
+    """
+    outcome = resolve(text, registry, gazetteer)
+    canon = _canon(text)
+    fired = outcome.stage_fired
+    steps: list[dict] = [{"stage": "NORMALIZE", "detail": f"{text!r} → 去符号/小写/去 sp.",
+                          "result": canon or "(空)"}]
+    bases = _base_names(text)
+    for st in _LADDER:
+        if st == "MODIFIER_STRIP" and st == fired:
+            hit_base = next((b for b in bases if registry.exact_common(b)[0]
+                             or registry.exact_scientific(b)[0]), canon)
+            steps.append({"stage": st, "detail": f"剥修饰 → {hit_base!r}",
+                          "result": outcome.matched_species_code})
+            break
+        if st == fired:
+            code = outcome.matched_species_code
+            steps.append({"stage": st, "detail": "命中" if code else "拿不准 → 弃答，绝不瞎猜",
+                          "result": code or "弃答"})
+            break
+        detail = "剥括号/修饰词后精确匹配" if st == "MODIFIER_STRIP" else "未命中"
+        steps.append({"stage": st, "detail": detail, "result": None})
+    return steps, outcome
+
+
 async def resolve_with_normalizer(
     text: str,
     registry: Registry,

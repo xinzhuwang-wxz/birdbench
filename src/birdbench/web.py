@@ -13,14 +13,17 @@ from pathlib import Path
 from birdbench.core import identify
 from birdbench.gateway import FakeGateway, Gateway
 from birdbench.registry import Registry, load_registry
+from birdbench.resolve import Gazetteer, trace_resolve
 from birdbench.schemas import ModelSpec
 
+# 下拉：(展示标签含 tag, 实际 model_id)。tag 来自 111 图实测。
 _MODELS = [
-    "fake/demo",
-    "dashscope/qwen3-vl-flash",
-    "dashscope/qwen3-vl-plus",
-    "volcengine/doubao-seed-2-0-lite-260428",
+    ("fake/demo（免费·测 UI，不花钱）", "fake/demo"),
+    ("qwen3-vl-flash 💰 最便宜", "dashscope/qwen3-vl-flash"),
+    ("qwen3-vl-plus", "dashscope/qwen3-vl-plus"),
+    ("doubao-lite 🏆 最准确（72%）", "volcengine/doubao-seed-2-0-lite-260428"),
 ]
+_ASSETS = Path(__file__).resolve().parent.parent.parent / "docs" / "assets"
 _DEMO_JSON = (
     '{"predictions":[{"common_name":"Northern Cardinal",'
     '"scientific_name":"Cardinalis cardinalis","rank_hint":"species","confidence":0.82,'
@@ -30,6 +33,8 @@ _DEMO_JSON = (
 )
 _MEDIA = {".png": "image/png", ".webp": "image/webp"}
 _reg: Registry | None = None
+_GZ = Gazetteer()
+_overlay_cache: dict | None = None
 
 
 def _registry() -> Registry:
@@ -37,6 +42,19 @@ def _registry() -> Registry:
     if _reg is None:
         _reg = load_registry()
     return _reg
+
+
+def _price_overlay() -> dict:
+    """价格 overlay（否则 doubao/qwen 无内置价→成本显示 $0）。"""
+    global _overlay_cache
+    if _overlay_cache is None:
+        p = Path(__file__).resolve().parent.parent.parent / "configs" / "doubao_price_overlay.json"
+        try:
+            raw = json.loads(p.read_text())
+            _overlay_cache = {k: v for k, v in raw.items() if not k.startswith("_")}
+        except Exception:  # noqa: BLE001
+            _overlay_cache = {}
+    return _overlay_cache
 
 
 def _gateway(
@@ -52,15 +70,50 @@ def _gateway(
         return FakeGateway(responses={spec.alias: _DEMO_JSON}), spec
     from birdbench.gateway import LiteLLMGateway
 
-    return LiteLLMGateway([spec]), spec
+    return LiteLLMGateway([spec], price_overlay=_price_overlay()), spec
+
+
+def _fmt_cost(c: float | None) -> str:
+    return f"${c:.6f}" if c else "$0（该模型无内置价/已计价为0）"
+
+
+def _trace_md(res) -> str:
+    """完整 trace：模型最初输出 → 提取候选 → top-1 逐阶解析（含具体信息）。"""
+    raw = (res.raw_output or "").strip() or "(空)"
+    parts = [
+        f"#### ① 模型最初输出（{res.model_resolved or '—'}）",
+        f"```json\n{raw}\n```",
+        "#### ② 提取的候选（parse → SpeciesPrediction）",
+    ]
+    if res.candidates:
+        parts.append("| # | 俗名/学名 | rank_hint | 置信 |\n|---|---|---|---|")
+        for i, c in enumerate(res.candidates):
+            nm = c.common_name or c.scientific_name or "—"
+            parts.append(f"| {i + 1} | {nm} | {c.rank_hint} | {c.confidence:.2f} |")
+    else:
+        parts.append("（模型弃答或无候选）")
+    top = ""
+    if res.candidates:
+        top = res.candidates[0].common_name or res.candidates[0].scientific_name or ""
+    if top:
+        steps, outcome = trace_resolve(top, _registry(), _GZ)
+        parts.append(f"#### ③ top-1 解析梯子：`{top}` → speciesCode")
+        parts.append("| 阶 | 动作 | 结果 |\n|---|---|---|")
+        for s in steps:
+            r = s["result"] if s["result"] is not None else "—"
+            parts.append(f"| {s['stage']} | {s['detail']} | `{r}` |")
+        final = outcome.matched_species_code or "弃答"
+        tax = f" → {res.order}/{res.family}/{res.genus}" if res.species_code else ""
+        parts.append(f"\n→ **最终码 `{final}`**（{outcome.stage_fired}）{tax}")
+    return "\n".join(parts)
 
 
 async def identify_handler(
     image_path: str | None, model_id: str, temperature: float = 0.0, thinking: bool = False
 ):
-    """图+模型+温度+thinking → (科属种卡片, top-k 表)。任何异常都兜底返回，不崩。"""
+    """图+模型+温度+thinking → (科属种卡片, top-k 表, 完整解析 trace)。异常都兜底，不崩。"""
     if not image_path:
-        return "（请先上传一张鸟图）", []
+        return "（请先上传一张鸟图）", [], ""
     try:
         gw, spec = _gateway(model_id, temperature, thinking)
         media = _MEDIA.get(Path(image_path).suffix.lower(), "image/jpeg")
@@ -68,22 +121,23 @@ async def identify_handler(
             Path(image_path).read_bytes(), spec, gateway=gw, registry=_registry(), media_type=media
         )
     except Exception as e:  # noqa: BLE001
-        return f"⚠️ 出错：{type(e).__name__}: {e}", []
+        return f"⚠️ 出错：{type(e).__name__}: {e}", [], ""
+    trace = _trace_md(res)
     if res.abstain:
-        return f"**弃答**：{res.abstain_reason}（成本 ${res.cost_usd}）", []
+        return f"**弃答**：{res.abstain_reason}（成本 {_fmt_cost(res.cost_usd)}）", [], trace
     md = (
         f"### {res.common_name}  `{res.species_code}`\n"
         f"- **目/科/属/种**：{res.order} / {res.family} / {res.genus} / {res.scientific_name}\n"
         f"- 解析：{res.resolution_stage}（score {res.resolution_score:.2f}）\n"
         f"- 依据：{res.field_marks or '—'}\n"
-        f"- 成本 ${res.cost_usd} · {res.latency_ms:.0f}ms · {res.total_tokens} tok\n"
+        f"- 成本 {_fmt_cost(res.cost_usd)} · {res.latency_ms:.0f}ms · {res.total_tokens} tok\n"
         f"- 模型版本：{res.model_resolved}"
     )
     table = [
         [c.common_name, c.rank_hint, round(c.confidence, 2), c.species_code or "—"]
         for c in res.candidates
     ]
-    return md, table
+    return md, table, trace
 
 
 def leaderboard_handler(pred_file) -> str:
@@ -132,10 +186,35 @@ def build_app():
             out_md = gr.Markdown(label="结果")
             headers = ["俗名", "rank_hint", "置信", "code"]
             out_tbl = gr.Dataframe(headers=headers, label="top-k 候选")
-            btn.click(identify_handler, [img, model, temp, think], [out_md, out_tbl],
+            with gr.Accordion("🔍 解析全过程（模型最初输出 → 提取 → 逐阶解析）", open=True):
+                out_trace = gr.Markdown()
+            btn.click(identify_handler, [img, model, temp, think], [out_md, out_tbl, out_trace],
                       api_name="identify")
         with gr.Tab("排行榜"):
-            pred = gr.File(label="predictions.jsonl", file_types=[".jsonl"])
+            gr.Markdown("### 📊 当前实测排行榜（n=111 图 × 5 模型，2026-07）")
+            lb_png = _ASSETS / "leaderboard.png"
+            if lb_png.exists():
+                gr.Image(value=str(lb_png), show_label=False, container=False,
+                         height=340)
+            gr.Markdown(
+                "🏆 **doubao-lite** 最准（72%） · 💰 **qwen3-vl-flash** 最便宜"
+                "（$0.00011/正确） · doubao 显著甩 qwen ~24pp（CI 不重叠）。"
+                "详见 `docs/v1-results-111.md` / benchmark 白皮书。"
+            )
+            gr.Markdown(
+                "---\n#### 传你自己的 `predictions.jsonl` 生成榜\n"
+                "**格式**：每行一条 JSON，关键字段——\n"
+                "```json\n"
+                '{"model_alias":"my-model","item_id":"i0","image_sha256":"x",'
+                '"scores":{"bucket":"A","top1":true,"top5":true,"genus":true,'
+                '"family":true,"order":true,"lca":1.0},'
+                '"cost_usd":0.001,"usage":{"total_tokens":100},"latency_ms":50.0}\n'
+                "```"
+            )
+            sample = _ASSETS / "sample_predictions.jsonl"
+            if sample.exists():
+                gr.File(value=str(sample), label="⬇️ 下载样例 predictions.jsonl（照此格式）")
+            pred = gr.File(label="上传你的 predictions.jsonl", file_types=[".jsonl"])
             lb_btn = gr.Button("生成排行榜", variant="primary")
             lb_html = gr.HTML()
             lb_btn.click(leaderboard_handler, [pred], [lb_html], api_name="leaderboard")
