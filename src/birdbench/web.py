@@ -276,6 +276,27 @@ async def batch_run_handler(specs, n_images, confirm, cap):
     return f"✓ {len(recs)} cells（{len(items)}图×{len(specs)}模型·{mode}）成本 ${cost:.5f}", recs
 
 
+# ---- FE-5: 单名解析器工具 ----
+def resolve_tool_handler(name: str) -> str:
+    """任意鸟名 → 逐阶 trace + 最终码 + 科属种。复用 trace_resolve。"""
+    if not name or not name.strip():
+        return "（输入一个鸟名，如 Cooper's Hawk / 北美红雀 / Cardinalis cardinalis）"
+    steps, outcome = trace_resolve(name.strip(), _registry(), _GZ)
+    lines = [f"**`{name}`** 逐阶解析：", "| 阶 | 动作 | 结果 |", "|---|---|---|"]
+    for s in steps:
+        r = s["result"] if s["result"] is not None else "—"
+        lines.append(f"| {s['stage']} | {s['detail']} | `{r}` |")
+    code = outcome.matched_species_code
+    if code:
+        tax = _registry().taxonomy_of(code)
+        lines.append(f"\n→ **`{code}`**（{outcome.stage_fired}）")
+        if tax:
+            lines.append(f"{tax.order}/{tax.family_sci}/{tax.genus}/{tax.sci_name}")
+    else:
+        lines.append(f"\n→ **弃答**（{outcome.stage_fired}）")
+    return "\n".join(lines)
+
+
 def build_app():
     import gradio as gr
 
@@ -356,6 +377,13 @@ def build_app():
             br_lb = gr.HTML()
             br_lb_btn.click(run_leaderboard_handler, [br_preds], [br_lb],
                            api_name="run_leaderboard")
+        with gr.Tab("解析器"):
+            gr.Markdown("### 任意鸟名 → speciesCode（逐阶 trace）")
+            rt_in = gr.Textbox(label="鸟名（俗名/学名/中文/带修饰）",
+                               placeholder="Cooper's Hawk")
+            rt_btn = gr.Button("解析", variant="primary")
+            rt_out = gr.Markdown()
+            rt_btn.click(resolve_tool_handler, [rt_in], [rt_out], api_name="resolve_tool")
     return demo
 
 

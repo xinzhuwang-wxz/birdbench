@@ -132,6 +132,14 @@ def test_estimate_cost_no_spend():
     assert _estimate_cost(specs, 10) > 0  # 有价→估算>0
 
 
+def test_resolve_tool_handler():
+    from birdbench.web import resolve_tool_handler
+
+    md = resolve_tool_handler("Cooper's Hawk")
+    assert "coohaw" in md and "EXACT_COM" in md  # 逐阶 + 命中码
+    assert "输入一个鸟名" in resolve_tool_handler("")  # 空不崩
+
+
 def test_leaderboard_handler(tmp_path):
     f = tmp_path / "p.jsonl"
     f.write_text(sample_predictions_jsonl())
