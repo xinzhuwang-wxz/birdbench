@@ -140,24 +140,40 @@ async def identify_handler(
     return md, table, trace
 
 
+def _render_leaderboard(recs) -> str:
+    """PredictionRecord 列表 → HTML 榜（显著性 + 校准）。上传与跑分共用。"""
+    from birdbench.report import build_leaderboard, compute_significance, render_html
+
+    rows = build_leaderboard(recs)
+    tied = compute_significance(recs, rows)
+    for r in rows:
+        r.tied_with_best = r.model_alias in tied
+    return render_html(rows, calibration=_calib(recs))
+
+
 def leaderboard_handler(pred_file) -> str:
     """上传 predictions.jsonl → HTML 榜。异常返回提示，不崩。"""
     if not pred_file:
         return "<p>（请上传一个 predictions.jsonl）</p>"
     try:
-        from birdbench.report import build_leaderboard, compute_significance, render_html
         from birdbench.schemas import PredictionRecord
 
         path = pred_file if isinstance(pred_file, str) else pred_file.name
         lines = Path(path).read_text().splitlines()
         recs = [PredictionRecord.model_validate_json(x) for x in lines if x.strip()]
-        rows = build_leaderboard(recs)
-        tied = compute_significance(recs, rows)
-        for r in rows:
-            r.tied_with_best = r.model_alias in tied
-        return render_html(rows, calibration=_calib(recs))
+        return _render_leaderboard(recs)
     except Exception as e:  # noqa: BLE001
         return f"<p>⚠️ 解析失败：{type(e).__name__}: {e}</p>"
+
+
+def run_leaderboard_handler(preds) -> str:
+    """FE-3：跑分产出的 predictions → 直接出榜（复用 _render_leaderboard）。"""
+    if not preds:
+        return "<p>（请先在上面跑分）</p>"
+    try:
+        return _render_leaderboard(preds)
+    except Exception as e:  # noqa: BLE001
+        return f"<p>⚠️ 渲染失败：{type(e).__name__}: {e}</p>"
 
 
 def _calib(recs) -> dict:
@@ -202,6 +218,62 @@ def model_config_handler(selected, temperature, thinking, custom):
         for s in specs
     ]
     return rows, specs
+
+
+# ---- FE-2: 批量跑分 ----
+_EVALSET = Path(__file__).resolve().parent.parent.parent / "data" / "evalset" / "manifest.jsonl"
+_EST_TOKENS = (1500, 150)  # 典型 prompt/completion tokens（v0 实测），供无 spend 估算
+
+
+def _is_real(specs) -> bool:
+    return os.environ.get("BIRDBENCH_REAL") == "1" and any(
+        not s.model_id.startswith("fake") for s in specs
+    )
+
+
+def _batch_gateway(specs):
+    if _is_real(specs):
+        from birdbench.gateway import LiteLLMGateway
+
+        return LiteLLMGateway(specs, price_overlay=_price_overlay())
+    return FakeGateway(responses={s.alias: _DEMO_JSON for s in specs})
+
+
+def _estimate_cost(specs, n_images: int) -> float:
+    """启发式估算（不真跑、不花钱）：典型 token × 官方价 × 图数。"""
+    ov = _price_overlay()
+    total = 0.0
+    for s in specs:
+        p = ov.get(s.model_id, {})
+        per = _EST_TOKENS[0] * p.get("input_cost_per_token", 0) + _EST_TOKENS[1] * p.get(
+            "output_cost_per_token", 0
+        )
+        total += per * n_images
+    return total
+
+
+async def batch_run_handler(specs, n_images, confirm, cap):
+    """模型集 × 内置评测集前 N 图 → predictions。真机先估算+cap+确认闸；demo 恒免费。"""
+    if not specs:
+        return "（请先在上面「确认模型集」）", None
+    from birdbench.bench import load_manifest, run_bench
+
+    n = max(1, int(n_images))
+    items = load_manifest(_EVALSET)[:n]
+    real = _is_real(specs)
+    if real:
+        est = _estimate_cost(specs, len(items))
+        if est > float(cap):
+            return f"⚠️ 预计 ${est:.4f} > cap ${cap} → 未跑。减少图数/模型或提高 cap。", None
+        if not confirm:
+            return f"预计 ${est:.4f}（{len(items)}图×{len(specs)}模型，真机）。勾确认再跑。", None
+    try:
+        recs = await run_bench(items, specs, gateway=_batch_gateway(specs), registry=_registry())
+    except Exception as e:  # noqa: BLE001
+        return f"⚠️ 跑分出错：{type(e).__name__}: {e}", None
+    cost = sum(r.cost_usd or 0 for r in recs)
+    mode = "真机" if real else "demo免费"
+    return f"✓ {len(recs)} cells（{len(items)}图×{len(specs)}模型·{mode}）成本 ${cost:.5f}", recs
 
 
 def build_app():
@@ -269,7 +341,21 @@ def build_app():
             mc_state = gr.State([])
             mc_btn.click(model_config_handler, [mc_select, mc_temp, mc_think, mc_custom],
                          [mc_table, mc_state], api_name="model_config")
-            gr.Markdown("_（跑分执行 + 直出榜见 FE-2/FE-3，开发中）_")
+            gr.Markdown("### ② 跑分（内置 111 图评测集）")
+            with gr.Row():
+                br_n = gr.Slider(1, 111, value=3, step=1, label="用前 N 张图")
+                br_cap = gr.Number(value=1.0, label="成本上限 $（cap）")
+                br_confirm = gr.Checkbox(value=False, label="确认花费（真机批量需勾）")
+            br_btn = gr.Button("开始跑分", variant="primary")
+            br_status = gr.Markdown()
+            br_preds = gr.State(None)
+            br_btn.click(batch_run_handler, [mc_state, br_n, br_cap, br_confirm],
+                         [br_status, br_preds], api_name="batch_run")
+            gr.Markdown("### ③ 排行榜（跑完直出：显著性 + 校准 + 成本）")
+            br_lb_btn = gr.Button("生成排行榜")
+            br_lb = gr.HTML()
+            br_lb_btn.click(run_leaderboard_handler, [br_preds], [br_lb],
+                           api_name="run_leaderboard")
     return demo
 
 

@@ -96,6 +96,42 @@ def test_model_config_handler_returns_rows_and_state():
     assert len(state) == 1  # State 存了 specs
 
 
+async def test_batch_run_handler_demo():
+    from birdbench.web import batch_run_handler, build_model_specs
+
+    specs = build_model_specs(["fake/demo"])
+    status, preds = await batch_run_handler(specs, 2, False, 1.0)
+    assert "cells" in status and preds is not None and len(preds) == 2  # 2图×1模型, fake免费
+
+
+async def test_batch_run_handler_no_specs():
+    from birdbench.web import batch_run_handler
+
+    status, preds = await batch_run_handler([], 2, False, 1.0)
+    assert "确认模型集" in status and preds is None
+
+
+async def test_run_leaderboard_from_batch():
+    from birdbench.web import batch_run_handler, build_model_specs, run_leaderboard_handler
+
+    specs = build_model_specs(["fake/demo"])
+    _, preds = await batch_run_handler(specs, 3, False, 1.0)
+    assert "Leaderboard" in run_leaderboard_handler(preds)  # 跑分→直出榜
+
+
+def test_run_leaderboard_handler_empty_no_crash():
+    from birdbench.web import run_leaderboard_handler
+
+    assert "请先" in run_leaderboard_handler(None)
+
+
+def test_estimate_cost_no_spend():
+    from birdbench.web import _estimate_cost, build_model_specs
+
+    specs = build_model_specs(["dashscope/qwen3-vl-plus"])
+    assert _estimate_cost(specs, 10) > 0  # 有价→估算>0
+
+
 def test_leaderboard_handler(tmp_path):
     f = tmp_path / "p.jsonl"
     f.write_text(sample_predictions_jsonl())
