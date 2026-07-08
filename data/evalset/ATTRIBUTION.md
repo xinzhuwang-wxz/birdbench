@@ -1,30 +1,116 @@
 # 评测集图片授权与署名（iNaturalist, CC）
 
 CC-BY-NC 仅私仓内部非商用评测；对外再分发须换 CC0/CC-BY（v2 人审）。真值待负责人复核。
+**污染警示**：iNat 公开图可能已在模型训练集内 → 绝对准确率或偏高；跨模型**相对**排名仍有效。彻底的时间留出(post-cutoff)需 v2。
 
-- **Mallard** (Anas platyrhynchos, `mallar3`): (c) Greg Lasley, some rights reserved (CC BY-NC) — iNat obs 8174772, cc-by-nc
-- **House Sparrow** (Passer domesticus, `houspa`): (c) carnifex, some rights reserved (CC BY) — iNat obs 125500734, cc-by
-- **Northern Cardinal** (Cardinalis cardinalis, `norcar`): (c) Ashley Bosarge, some rights reserved (CC BY-NC) — iNat obs 81468597, cc-by-nc
-- **American Robin** (Turdus migratorius, `amerob`): (c) Sue Janssen, some rights reserved (CC BY-NC) — iNat obs 50335435, cc-by-nc
-- **Blue Jay** (Cyanocitta cristata, `blujay`): (c) jacobrud, some rights reserved (CC BY-NC) — iNat obs 69404364, cc-by-nc
-- **American Crow** (Corvus brachyrhynchos, `amecro`): no rights reserved — iNat obs 34034414, cc0
-- **Canada Goose** (Branta canadensis, `cangoo`): (c) NHMLA Community Science Program, some rights reserved (CC BY-NC) — iNat obs 2842153, cc-by-nc
-- **Rock Pigeon** (Columba livia, `rocpig`): (c) Susan J. Hewitt, some rights reserved (CC BY-NC) — iNat obs 19807660, cc-by-nc
-- **Cooper's Hawk** (Astur cooperii, `coohaw`): (c) John Karges, some rights reserved (CC BY-NC) — iNat obs 4617578, cc-by-nc
-- **Sharp-shinned Hawk** (Accipiter striatus, `shshaw`): (c) Craig K. Hunt, some rights reserved (CC BY-NC) — iNat obs 36411517, cc-by-nc
-- **Downy Woodpecker** (Dryobates pubescens, `dowwoo`): (c) Alexis Williams, some rights reserved (CC BY) — iNat obs 105542582, cc-by
-- **Hairy Woodpecker** (Leuconotopicus villosus, `haiwoo`): (c) Mark Dorriesfield, some rights reserved (CC BY-NC) — iNat obs 37269809, cc-by-nc
-- **House Finch** (Haemorhous mexicanus, `houfin`): (c) Torsten Eriksson, some rights reserved (CC BY-NC) — iNat obs 14463133, cc-by-nc
-- **Purple Finch** (Haemorhous purpureus, `purfin`): (c) Dani Alba, some rights reserved (CC BY) — iNat obs 271330241, cc-by
-- **Least Flycatcher** (Empidonax minimus, `leafly`): (c) cgbb2004, some rights reserved (CC BY-NC) — iNat obs 26320108, cc-by-nc
-- **Willow Flycatcher** (Empidonax traillii, `wilfly`): (c) Matthew Brown, some rights reserved (CC BY-NC) — iNat obs 365148969, cc-by-nc
-- **Painted Bunting** (Passerina ciris, `paibun`): (c) Greg Lasley, some rights reserved (CC BY-NC) — iNat obs 4770340, cc-by-nc
-- **Roseate Spoonbill** (Platalea ajaja, `rosspo1`): (c) Jared Shorma, some rights reserved (CC BY) — iNat obs 104079965, cc-by
-- **Wood Duck** (Aix sponsa, `wooduc`): (c) Judith Ellen Lopez, some rights reserved (CC BY-NC) — iNat obs 4857599, cc-by-nc
-- **Pileated Woodpecker** (Dryocopus pileatus, `pilwoo`): (c) Kyle Tansley, some rights reserved (CC BY-NC) — iNat obs 15404736, cc-by-nc
-- **Belted Kingfisher** (Megaceryle alcyon, `belkin1`): (c) neilandsharon, some rights reserved (CC BY-NC) — iNat obs 160564984, cc-by-nc
-- **Snowy Owl** (Bubo scandiacus, `snoowl1`): (c) hbmandy, some rights reserved (CC BY-NC) — iNat obs 141840954, cc-by-nc
-- **Great Gray Owl** (Strix nebulosa, `grgowl`): (c) Elena Shnayder, some rights reserved (CC BY-NC) — iNat obs 257227461, cc-by-nc
-- **Ring-billed Gull** (Larus delawarensis, `ribgul`): (c) Kyle Cocjin, some rights reserved (CC BY-NC) — iNat obs 149285888, cc-by-nc
-- **Greater Scaup** (Aythya marila, `gresca`): (c) Pavel Shukov, some rights reserved (CC BY-NC) — iNat obs 102600528, cc-by-nc
-- **Lesser Scaup** (Aythya affinis, `lessca`): (c) Alain Maire, some rights reserved (CC BY-NC) — iNat obs 102431469, cc-by-nc
+- **Mallard** (Anas platyrhynchos, `mallar3-0`): (c) Greg Lasley, some rights reserved (CC BY-NC) — iNat obs 8174772, cc-by-nc
+- **Mallard** (Anas platyrhynchos, `mallar3-1`): (c) Kyle Tansley, some rights reserved (CC BY-NC) — iNat obs 13447878, cc-by-nc
+- **Mallard** (Anas platyrhynchos, `mallar3-2`): no rights reserved — iNat obs 21203884, cc0
+- **House Sparrow** (Passer domesticus, `houspa-0`): (c) carnifex, some rights reserved (CC BY) — iNat obs 125500734, cc-by
+- **House Sparrow** (Passer domesticus, `houspa-1`): (c) Douglas Wiebe, some rights reserved (CC BY-NC) — iNat obs 54899206, cc-by-nc
+- **House Sparrow** (Passer domesticus, `houspa-2`): (c) vyatka, some rights reserved (CC BY-NC) — iNat obs 59971434, cc-by-nc
+- **Northern Cardinal** (Cardinalis cardinalis, `norcar-0`): (c) Ashley Bosarge, some rights reserved (CC BY-NC) — iNat obs 81468597, cc-by-nc
+- **Northern Cardinal** (Cardinalis cardinalis, `norcar-1`): (c) Laura Keene, some rights reserved (CC BY-NC) — iNat obs 112161687, cc-by-nc
+- **Northern Cardinal** (Cardinalis cardinalis, `norcar-2`): (c) Daughter Dad, some rights reserved (CC BY) — iNat obs 287527828, cc-by
+- **American Robin** (Turdus migratorius, `amerob-0`): (c) Sue Janssen, some rights reserved (CC BY-NC) — iNat obs 50335435, cc-by-nc
+- **American Robin** (Turdus migratorius, `amerob-1`): (c) Kyle Tansley, some rights reserved (CC BY-NC) — iNat obs 20875857, cc-by-nc
+- **American Robin** (Turdus migratorius, `amerob-2`): (c) Ольга Курякова, some rights reserved (CC BY-NC) — iNat obs 31467421, cc-by-nc
+- **Blue Jay** (Cyanocitta cristata, `blujay-0`): (c) jacobrud, some rights reserved (CC BY-NC) — iNat obs 69404364, cc-by-nc
+- **Blue Jay** (Cyanocitta cristata, `blujay-1`): (c) Josiah Reed, some rights reserved (CC BY-NC) — iNat obs 166336075, cc-by-nc
+- **Blue Jay** (Cyanocitta cristata, `blujay-2`): (c) mhalsted, some rights reserved (CC BY-NC) — iNat obs 197871047, cc-by-nc
+- **American Crow** (Corvus brachyrhynchos, `amecro-0`): no rights reserved — iNat obs 34034414, cc0
+- **American Crow** (Corvus brachyrhynchos, `amecro-1`): (c) Justin Flint, some rights reserved (CC BY) — iNat obs 145796410, cc-by
+- **American Crow** (Corvus brachyrhynchos, `amecro-2`): (c) T.L.Knight, some rights reserved (CC BY-NC) — iNat obs 187959790, cc-by-nc
+- **Canada Goose** (Branta canadensis, `cangoo-0`): (c) NHMLA Community Science Program, some rights reserved (CC BY-NC) — iNat obs 2842153, cc-by-nc
+- **Canada Goose** (Branta canadensis, `cangoo-1`): (c) Leah Fulton, some rights reserved (CC BY) — iNat obs 75718382, cc-by
+- **Canada Goose** (Branta canadensis, `cangoo-2`): (c) Bridget Spencer, some rights reserved (CC BY-NC) — iNat obs 21815474, cc-by-nc
+- **Rock Pigeon** (Columba livia, `rocpig-0`): (c) Susan J. Hewitt, some rights reserved (CC BY-NC) — iNat obs 19807660, cc-by-nc
+- **Rock Pigeon** (Columba livia, `rocpig-1`): (c) Tyler Bishop, some rights reserved (CC BY) — iNat obs 80165733, cc-by
+- **Rock Pigeon** (Columba livia, `rocpig-2`): (c) taisiam, some rights reserved (CC BY-NC) — iNat obs 196979901, cc-by-nc
+- **American Goldfinch** (Spinus tristis, `amegfi-0`): (c) Martin Hall, some rights reserved (CC BY-NC) — iNat obs 9294892, cc-by-nc
+- **American Goldfinch** (Spinus tristis, `amegfi-1`): (c) Kyle Tansley, some rights reserved (CC BY-NC) — iNat obs 31975384, cc-by-nc
+- **American Goldfinch** (Spinus tristis, `amegfi-2`): no rights reserved — iNat obs 53187208, cc0
+- **Northern Flicker** (Colaptes auratus, `norfli-0`): (c) Scott King, some rights reserved (CC BY-NC) — iNat obs 9861573, cc-by-nc
+- **Northern Flicker** (Colaptes auratus, `norfli-1`): (c) Jonathan Irons, some rights reserved (CC BY-NC) — iNat obs 185459920, cc-by-nc
+- **Northern Flicker** (Colaptes auratus, `norfli-2`): (c) Robin Gwen Agarwal, some rights reserved (CC BY-NC) — iNat obs 255815975, cc-by-nc
+- **Cooper's Hawk** (Astur cooperii, `coohaw-0`): (c) John Karges, some rights reserved (CC BY-NC) — iNat obs 4617578, cc-by-nc
+- **Cooper's Hawk** (Astur cooperii, `coohaw-1`): (c) Becky Matsubara, some rights reserved (CC BY) — iNat obs 27793926, cc-by
+- **Cooper's Hawk** (Astur cooperii, `coohaw-2`): (c) mallorydotson, some rights reserved (CC BY-NC) — iNat obs 147499683, cc-by-nc
+- **Sharp-shinned Hawk** (Accipiter striatus, `shshaw-0`): (c) Craig K. Hunt, some rights reserved (CC BY-NC) — iNat obs 36411517, cc-by-nc
+- **Sharp-shinned Hawk** (Accipiter striatus, `shshaw-1`): (c) RJ Baltierra, some rights reserved (CC BY) — iNat obs 37472832, cc-by
+- **Sharp-shinned Hawk** (Accipiter striatus, `shshaw-2`): (c) Craig K. Hunt, some rights reserved (CC BY-NC) — iNat obs 70406342, cc-by-nc
+- **Downy Woodpecker** (Dryobates pubescens, `dowwoo-0`): (c) Alexis Williams, some rights reserved (CC BY) — iNat obs 105542582, cc-by
+- **Downy Woodpecker** (Dryobates pubescens, `dowwoo-1`): (c) Craig K. Hunt, some rights reserved (CC BY-NC) — iNat obs 85400696, cc-by-nc
+- **Downy Woodpecker** (Dryobates pubescens, `dowwoo-2`): (c) Thomas Shahan, some rights reserved (CC BY-NC) — iNat obs 201439656, cc-by-nc
+- **Hairy Woodpecker** (Leuconotopicus villosus, `haiwoo-0`): (c) Mark Dorriesfield, some rights reserved (CC BY-NC) — iNat obs 37269809, cc-by-nc
+- **Hairy Woodpecker** (Leuconotopicus villosus, `haiwoo-1`): (c) Craig K. Hunt, some rights reserved (CC BY-NC) — iNat obs 98604641, cc-by-nc
+- **Hairy Woodpecker** (Leuconotopicus villosus, `haiwoo-2`): (c) LeAnn Plinske, some rights reserved (CC BY-NC) — iNat obs 101222185, cc-by-nc
+- **House Finch** (Haemorhous mexicanus, `houfin-0`): (c) Torsten Eriksson, some rights reserved (CC BY-NC) — iNat obs 14463133, cc-by-nc
+- **House Finch** (Haemorhous mexicanus, `houfin-1`): (c) Coleen Lawlor, some rights reserved (CC BY-NC) — iNat obs 36299406, cc-by-nc
+- **House Finch** (Haemorhous mexicanus, `houfin-2`): (c) Yinglun Li, some rights reserved (CC BY-NC) — iNat obs 267009396, cc-by-nc
+- **Purple Finch** (Haemorhous purpureus, `purfin-0`): (c) Dani Alba, some rights reserved (CC BY) — iNat obs 271330241, cc-by
+- **Purple Finch** (Haemorhous purpureus, `purfin-1`): (c) Patricia, some rights reserved (CC BY-NC) — iNat obs 108625129, cc-by-nc
+- **Purple Finch** (Haemorhous purpureus, `purfin-2`): (c) abcdefgewing, some rights reserved (CC BY-NC) — iNat obs 69676783, cc-by-nc
+- **Least Flycatcher** (Empidonax minimus, `leafly-0`): (c) cgbb2004, some rights reserved (CC BY-NC) — iNat obs 26320108, cc-by-nc
+- **Least Flycatcher** (Empidonax minimus, `leafly-1`): (c) Haley Daniels, some rights reserved (CC BY) — iNat obs 89005801, cc-by
+- **Least Flycatcher** (Empidonax minimus, `leafly-2`): (c) brian stahls, some rights reserved (CC BY-NC) — iNat obs 162983228, cc-by-nc
+- **Willow Flycatcher** (Empidonax traillii, `wilfly-0`): (c) Matthew Brown, some rights reserved (CC BY-NC) — iNat obs 365148969, cc-by-nc
+- **Willow Flycatcher** (Empidonax traillii, `wilfly-1`): (c) Ad Konings, some rights reserved (CC BY-NC) — iNat obs 129055434, cc-by-nc
+- **Willow Flycatcher** (Empidonax traillii, `wilfly-2`): (c) clairebear666, some rights reserved (CC BY-NC) — iNat obs 295606947, cc-by-nc
+- **Song Sparrow** (Melospiza melodia, `sonspa-0`): (c) Bridget Spencer, some rights reserved (CC BY-NC) — iNat obs 20290048, cc-by-nc
+- **Song Sparrow** (Melospiza melodia, `sonspa-1`): (c) Craig K. Hunt, some rights reserved (CC BY-NC) — iNat obs 81129507, cc-by-nc
+- **Song Sparrow** (Melospiza melodia, `sonspa-2`): (c) Steven Mlodinow, some rights reserved (CC BY-NC) — iNat obs 2559195, cc-by-nc
+- **Savannah Sparrow** (Passerculus sandwichensis, `savspa-0`): (c) terence zahner, some rights reserved (CC BY-NC) — iNat obs 100624062, cc-by-nc
+- **Savannah Sparrow** (Passerculus sandwichensis, `savspa-1`): (c) roy pilcher, some rights reserved (CC BY-NC) — iNat obs 2034510, cc-by-nc
+- **Savannah Sparrow** (Passerculus sandwichensis, `savspa-2`): (c) Frank Lin, some rights reserved (CC BY-NC) — iNat obs 212995935, cc-by-nc
+- **Black-capped Chickadee** (Poecile atricapillus, `bkcchi-0`): (c) Tom Preney, some rights reserved (CC BY-NC) — iNat obs 6679901, cc-by-nc
+- **Black-capped Chickadee** (Poecile atricapillus, `bkcchi-1`): (c) Bridget Spencer, some rights reserved (CC BY-NC) — iNat obs 31145197, cc-by-nc
+- **Black-capped Chickadee** (Poecile atricapillus, `bkcchi-2`): (c) Mike Leveille, some rights reserved (CC BY-NC) — iNat obs 9174809, cc-by-nc
+- **Carolina Chickadee** (Poecile carolinensis, `carchi-0`): (c) Greg Lasley, some rights reserved (CC BY-NC) — iNat obs 18702271, cc-by-nc
+- **Carolina Chickadee** (Poecile carolinensis, `carchi-1`): (c) Steve Gallagher, some rights reserved (CC BY-NC) — iNat obs 110845828, cc-by-nc
+- **Carolina Chickadee** (Poecile carolinensis, `carchi-2`): (c) MJ, some rights reserved (CC BY-NC) — iNat obs 333588230, cc-by-nc
+- **Painted Bunting** (Passerina ciris, `paibun-0`): (c) Greg Lasley, some rights reserved (CC BY-NC) — iNat obs 4770340, cc-by-nc
+- **Painted Bunting** (Passerina ciris, `paibun-1`): (c) Balaji Devarajan, some rights reserved (CC BY-NC) — iNat obs 169498362, cc-by-nc
+- **Painted Bunting** (Passerina ciris, `paibun-2`): (c) el pajarazzi, some rights reserved (CC BY-NC) — iNat obs 351845369, cc-by-nc
+- **Vermilion Flycatcher** (Pyrocephalus rubinus, `verfly-0`): (c) Grigory Heaton, some rights reserved (CC BY-NC) — iNat obs 145118092, cc-by-nc
+- **Vermilion Flycatcher** (Pyrocephalus rubinus, `verfly-1`): (c) Salvador Luna Vargas, some rights reserved (CC BY-NC) — iNat obs 28981644, cc-by-nc
+- **Vermilion Flycatcher** (Pyrocephalus rubinus, `verfly-2`): (c) Teri, some rights reserved (CC BY-NC) — iNat obs 37547915, cc-by-nc
+- **Roseate Spoonbill** (Platalea ajaja, `rosspo1-0`): (c) Jared Shorma, some rights reserved (CC BY) — iNat obs 104079965, cc-by
+- **Roseate Spoonbill** (Platalea ajaja, `rosspo1-1`): (c) Instituto Últimos Refúgios, some rights reserved (CC BY-NC) — iNat obs 9851636, cc-by-nc
+- **Roseate Spoonbill** (Platalea ajaja, `rosspo1-2`): (c) Kathy Bargar, some rights reserved (CC BY-NC) — iNat obs 113286262, cc-by-nc
+- **Wood Duck** (Aix sponsa, `wooduc-0`): (c) Judith Ellen Lopez, some rights reserved (CC BY-NC) — iNat obs 4857599, cc-by-nc
+- **Wood Duck** (Aix sponsa, `wooduc-1`): (c) Kent Ross, some rights reserved (CC BY-NC) — iNat obs 102643081, cc-by-nc
+- **Wood Duck** (Aix sponsa, `wooduc-2`): (c) Jason Headley, some rights reserved (CC BY-NC) — iNat obs 9760849, cc-by-nc
+- **Pileated Woodpecker** (Dryocopus pileatus, `pilwoo-0`): (c) Kyle Tansley, some rights reserved (CC BY-NC) — iNat obs 15404736, cc-by-nc
+- **Pileated Woodpecker** (Dryocopus pileatus, `pilwoo-1`): (c) Marv Elliott, some rights reserved (CC BY-NC) — iNat obs 538467, cc-by-nc
+- **Pileated Woodpecker** (Dryocopus pileatus, `pilwoo-2`): (c) Mark Olivier, some rights reserved (CC BY-NC) — iNat obs 18879342, cc-by-nc
+- **Belted Kingfisher** (Megaceryle alcyon, `belkin1-0`): (c) neilandsharon, some rights reserved (CC BY-NC) — iNat obs 160564984, cc-by-nc
+- **Belted Kingfisher** (Megaceryle alcyon, `belkin1-1`): (c) Jonathan Eisen, some rights reserved (CC BY) — iNat obs 39418726, cc-by
+- **Belted Kingfisher** (Megaceryle alcyon, `belkin1-2`): (c) Greg Lasley, some rights reserved (CC BY-NC) — iNat obs 5573360, cc-by-nc
+- **Snowy Owl** (Bubo scandiacus, `snoowl1-0`): (c) hbmandy, some rights reserved (CC BY-NC) — iNat obs 141840954, cc-by-nc
+- **Snowy Owl** (Bubo scandiacus, `snoowl1-1`): (c) pjmorgan1, some rights reserved (CC BY-NC) — iNat obs 340970207, cc-by-nc
+- **Snowy Owl** (Bubo scandiacus, `snoowl1-2`): (c) Yelena, some rights reserved (CC BY-NC) — iNat obs 189971402, cc-by-nc
+- **Great Gray Owl** (Strix nebulosa, `grgowl-0`): (c) Elena Shnayder, some rights reserved (CC BY-NC) — iNat obs 257227461, cc-by-nc
+- **Great Gray Owl** (Strix nebulosa, `grgowl-1`): (c) Aleksey Levashkin, some rights reserved (CC BY-NC) — iNat obs 18580040, cc-by-nc
+- **Great Gray Owl** (Strix nebulosa, `grgowl-2`): (c) Bri B, some rights reserved (CC BY-NC) — iNat obs 201886341, cc-by-nc
+- **American Herring Gull** (Larus smithsonianus, `amhgul1-0`): (c) Robert Levy, some rights reserved (CC BY-NC) — iNat obs 52876402, cc-by-nc
+- **American Herring Gull** (Larus smithsonianus, `amhgul1-1`): (c) Andrea Kreuzhage, some rights reserved (CC BY-NC) — iNat obs 62945543, cc-by-nc
+- **American Herring Gull** (Larus smithsonianus, `amhgul1-2`): (c) Craig K. Hunt, some rights reserved (CC BY-NC) — iNat obs 253803955, cc-by-nc
+- **Ring-billed Gull** (Larus delawarensis, `ribgul-0`): (c) Kyle Cocjin, some rights reserved (CC BY-NC) — iNat obs 149285888, cc-by-nc
+- **Ring-billed Gull** (Larus delawarensis, `ribgul-1`): (c) Robin Gwen Agarwal, some rights reserved (CC BY-NC) — iNat obs 2579619, cc-by-nc
+- **Ring-billed Gull** (Larus delawarensis, `ribgul-2`): (c) Karen E. Lund, some rights reserved (CC BY-NC) — iNat obs 73689232, cc-by-nc
+- **California Gull** (Larus californicus, `calgul-0`): (c) Madeleine Claire, some rights reserved (CC BY) — iNat obs 101248604, cc-by
+- **California Gull** (Larus californicus, `calgul-1`): (c) a_virginian, some rights reserved (CC BY) — iNat obs 224500513, cc-by
+- **California Gull** (Larus californicus, `calgul-2`): (c) Michael Warner, some rights reserved (CC BY) — iNat obs 62872760, cc-by
+- **Greater Scaup** (Aythya marila, `gresca-0`): (c) Pavel Shukov, some rights reserved (CC BY-NC) — iNat obs 102600528, cc-by-nc
+- **Greater Scaup** (Aythya marila, `gresca-1`): (c) Paul Tavares, some rights reserved (CC BY-NC) — iNat obs 105588931, cc-by-nc
+- **Greater Scaup** (Aythya marila, `gresca-2`): (c) Gaozi Chen, some rights reserved (CC BY-NC) — iNat obs 34238527, cc-by-nc
+- **Lesser Scaup** (Aythya affinis, `lessca-0`): (c) Alain Maire, some rights reserved (CC BY-NC) — iNat obs 102431469, cc-by-nc
+- **Lesser Scaup** (Aythya affinis, `lessca-1`): (c) Madeleine Claire, some rights reserved (CC BY) — iNat obs 67651282, cc-by
+- **Lesser Scaup** (Aythya affinis, `lessca-2`): (c) Ad Konings, some rights reserved (CC BY-NC) — iNat obs 66934676, cc-by-nc
+- **Greater Yellowlegs** (Tringa melanoleuca, `greyel-0`): (c) Kent Ross, some rights reserved (CC BY-NC) — iNat obs 130625202, cc-by-nc
+- **Greater Yellowlegs** (Tringa melanoleuca, `greyel-1`): (c) Andrew Hart, some rights reserved (CC BY-NC) — iNat obs 61248296, cc-by-nc
+- **Greater Yellowlegs** (Tringa melanoleuca, `greyel-2`): (c) Quinten Wiegersma, some rights reserved (CC BY) — iNat obs 16013566, cc-by
+- **Lesser Yellowlegs** (Tringa flavipes, `lesyel-0`): (c) Seb Higginson, some rights reserved (CC BY-NC) — iNat obs 316081785, cc-by-nc
+- **Lesser Yellowlegs** (Tringa flavipes, `lesyel-1`): (c) lkvt, some rights reserved (CC BY-NC) — iNat obs 169785032, cc-by-nc
+- **Lesser Yellowlegs** (Tringa flavipes, `lesyel-2`): (c) Kent Ross, some rights reserved (CC BY-NC) — iNat obs 130625210, cc-by-nc
