@@ -1,5 +1,7 @@
 {
-  "_note": "自维护价格表(USD/token)灌入 litellm。价源=各家官方现价(2026-07,≤32k 档)按汇率换算。litellm 对 doubao 及新 qwen3-vl 多无内置价 → 三个真机模型都在此登记。图像走 token 计费(usage 已含图像 token)。",
+  "_note": "自维护价格表(USD/token)灌入 litellm。litellm 对 doubao 及新 qwen3-vl 多无内置价 → 三个真机模型都在此登记。图像走 token 计费(usage 已含图像 token)。",
+  "_as_of": "2026-07 搜得的公开挂牌价(list price, ≤32k 档)。Doubao Seed 2.0 系列 2026-02-14 发布。",
+  "_provenance": "Qwen: 阿里云百炼官方定价页(搜索摘要)。Doubao: 第三方2026汇总页(ofox/datalearner)——官方价格页JS渲染抓不到表。**均为挂牌价,未经用户实际账单核对**;汇率7.15为估算。以计费台账单为准,单价改这里一处即可。",
   "_source_prices_cny_per_million_tokens": {
     "doubao-seed-2.0-lite": {"input": 0.6, "output": 3.6, "cache_hit": 0.12},
     "qwen3-vl-plus": {"input": 1.0, "output": 10.0},
