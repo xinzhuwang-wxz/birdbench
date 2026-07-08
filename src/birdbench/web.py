@@ -39,21 +39,14 @@ def _registry() -> Registry:
     return _reg
 
 
-# 已知真机模型的验证过参数（doubao 关 thinking 否则慢+包裹 JSON；温度 0）
-_PARAMS = {
-    "volcengine/doubao-seed-2-0-lite-260428": {
-        "temperature": 0,
-        "extra_body": {"thinking": {"type": "disabled"}},
-    },
-    "dashscope/qwen3-vl-plus": {"temperature": 0},
-    "dashscope/qwen3-vl-flash": {"temperature": 0},
-}
-
-
-def _gateway(model_id: str) -> tuple[Gateway, ModelSpec]:
+def _gateway(
+    model_id: str, temperature: float = 0.0, thinking: bool = False
+) -> tuple[Gateway, ModelSpec]:
+    params: dict = {"temperature": temperature}
+    if "doubao" in model_id:  # thinking 仅 doubao 有；实测无益 → 默认关
+        params["extra_body"] = {"thinking": {"type": "enabled" if thinking else "disabled"}}
     spec = ModelSpec(
-        alias=model_id, model_id=model_id, provider=model_id.split("/")[0],
-        params=_PARAMS.get(model_id, {}),
+        alias=model_id, model_id=model_id, provider=model_id.split("/")[0], params=params
     )
     if model_id.startswith("fake") or os.environ.get("BIRDBENCH_REAL") != "1":
         return FakeGateway(responses={spec.alias: _DEMO_JSON}), spec
@@ -62,12 +55,14 @@ def _gateway(model_id: str) -> tuple[Gateway, ModelSpec]:
     return LiteLLMGateway([spec]), spec
 
 
-async def identify_handler(image_path: str | None, model_id: str):
-    """图 + 模型 → (科属种卡片 markdown, top-k 表)。任何异常都返回错误信息，不崩。"""
+async def identify_handler(
+    image_path: str | None, model_id: str, temperature: float = 0.0, thinking: bool = False
+):
+    """图+模型+温度+thinking → (科属种卡片, top-k 表)。任何异常都兜底返回，不崩。"""
     if not image_path:
         return "（请先上传一张鸟图）", []
     try:
-        gw, spec = _gateway(model_id)
+        gw, spec = _gateway(model_id, temperature, thinking)
         media = _MEDIA.get(Path(image_path).suffix.lower(), "image/jpeg")
         res = await identify(
             Path(image_path).read_bytes(), spec, gateway=gw, registry=_registry(), media_type=media
@@ -129,11 +124,16 @@ def build_app():
                 img = gr.Image(type="filepath", label="鸟图（拖拽/上传）")
                 with gr.Column():
                     model = gr.Dropdown(_MODELS, value="fake/demo", label="模型")
+                    temp = gr.Slider(0.0, 1.0, value=0.0, step=0.1,
+                                     label="温度 temperature（实测 0 最优）")
+                    think = gr.Checkbox(value=False,
+                                        label="thinking（仅 doubao；实测无益，默认关）")
                     btn = gr.Button("识别", variant="primary")
             out_md = gr.Markdown(label="结果")
             headers = ["俗名", "rank_hint", "置信", "code"]
             out_tbl = gr.Dataframe(headers=headers, label="top-k 候选")
-            btn.click(identify_handler, [img, model], [out_md, out_tbl], api_name="identify")
+            btn.click(identify_handler, [img, model, temp, think], [out_md, out_tbl],
+                      api_name="identify")
         with gr.Tab("排行榜"):
             pred = gr.File(label="predictions.jsonl", file_types=[".jsonl"])
             lb_btn = gr.Button("生成排行榜", variant="primary")
