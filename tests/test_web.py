@@ -132,6 +132,25 @@ def test_estimate_cost_no_spend():
     assert _estimate_cost(specs, 10) > 0  # 有价→估算>0
 
 
+def test_prompt_choices_and_load():
+    from birdbench.web import load_prompt_handler, prompt_choices
+
+    assert "species_id.v0" in prompt_choices()  # 列出现有版本
+    content, info = load_prompt_handler("species_id.v0")
+    assert content and "v0" in info  # 载入原始内容 + 元信息
+
+
+def test_save_prompt_new_version_and_refuse_overwrite(tmp_path):
+    from birdbench.web import save_prompt_handler
+
+    status, choices = save_prompt_handler("t", "v1", "## system\nhi", prompts_dir=tmp_path)
+    assert "已存为" in status and (tmp_path / "t.v1.md").exists()
+    assert "t.v1" in choices  # 刷新的 choices 含新版本
+    # 再存同名 → 拒绝覆盖（保护契约默认）
+    again, _ = save_prompt_handler("t", "v1", "xx", prompts_dir=tmp_path)
+    assert "已存在" in again
+
+
 def test_resolve_tool_handler():
     from birdbench.web import resolve_tool_handler
 

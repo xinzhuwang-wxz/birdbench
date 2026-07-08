@@ -276,6 +276,46 @@ async def batch_run_handler(specs, n_images, confirm, cap):
     return f"✓ {len(recs)} cells（{len(items)}图×{len(specs)}模型·{mode}）成本 ${cost:.5f}", recs
 
 
+# ---- FE-4: Prompt 选择/编辑（版本管理）----
+_PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
+
+
+def prompt_choices(prompts_dir=None) -> list[str]:
+    from birdbench.prompts import list_prompts
+
+    d = Path(prompts_dir) if prompts_dir else _PROMPTS_DIR
+    return [f"{p.name}.{p.version}" for p in list_prompts(d)]
+
+
+def load_prompt_handler(name_version, prompts_dir=None):
+    """选中的 name.version → (原始 md 文本, 元信息)。"""
+    d = Path(prompts_dir) if prompts_dir else _PROMPTS_DIR
+    if not name_version:
+        return "", "（选一个 prompt 版本）"
+    f = d / f"{name_version}.md"
+    if not f.exists():
+        return "", "（文件不存在）"
+    from birdbench.prompts import load_prompt_file
+
+    p = load_prompt_file(f)
+    return f.read_text(), f"版本 {p.version} · hash {p.content_hash[:8]} · params {p.params}"
+
+
+def save_prompt_handler(new_name, new_version, content, prompts_dir=None):
+    """另存新版本（additive；拒绝覆盖已存在=保护契约默认，满足 HITL）。返回 (状态, choices)。"""
+    d = Path(prompts_dir) if prompts_dir else _PROMPTS_DIR
+    name, ver = (new_name or "").strip(), (new_version or "").strip()
+    if not name or not ver:
+        return "（填 name 和 version，如 species_id / v1）", prompt_choices(d)
+    if not (content or "").strip():
+        return "（内容为空）", prompt_choices(d)
+    f = d / f"{name}.{ver}.md"
+    if f.exists():
+        return f"⚠️ {f.name} 已存在 → 换版本号（UI 不覆盖契约默认，只新增版本）", prompt_choices(d)
+    f.write_text(content)
+    return f"✓ 已存为新版本 {f.name}", prompt_choices(d)
+
+
 # ---- FE-5: 单名解析器工具 ----
 def resolve_tool_handler(name: str) -> str:
     """任意鸟名 → 逐阶 trace + 最终码 + 科属种。复用 trace_resolve。"""
@@ -377,6 +417,26 @@ def build_app():
             br_lb = gr.HTML()
             br_lb_btn.click(run_leaderboard_handler, [br_preds], [br_lb],
                            api_name="run_leaderboard")
+        with gr.Tab("Prompt"):
+            gr.Markdown("### Prompt 版本（同事可编辑·版本管理；不覆盖契约默认，只新增）")
+            pr_dd = gr.Dropdown(prompt_choices(), label="选版本")
+            pr_view = gr.Button("查看")
+            pr_content = gr.Textbox(label="内容（可编辑）", lines=12)
+            pr_info = gr.Markdown()
+            pr_view.click(load_prompt_handler, [pr_dd], [pr_content, pr_info],
+                          api_name="load_prompt")
+            gr.Markdown("#### 另存为新版本")
+            with gr.Row():
+                pr_name = gr.Textbox(label="name", value="species_id")
+                pr_ver = gr.Textbox(label="version", placeholder="v1")
+            pr_save = gr.Button("另存为新版本", variant="primary")
+            pr_status = gr.Markdown()
+
+            def _save(name, ver, content):
+                status, choices = save_prompt_handler(name, ver, content)
+                return status, gr.update(choices=choices)
+
+            pr_save.click(_save, [pr_name, pr_ver, pr_content], [pr_status, pr_dd])
         with gr.Tab("解析器"):
             gr.Markdown("### 任意鸟名 → speciesCode（逐阶 trace）")
             rt_in = gr.Textbox(label="鸟名（俗名/学名/中文/带修饰）",
