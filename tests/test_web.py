@@ -151,12 +151,29 @@ def test_save_prompt_new_version_and_refuse_overwrite(tmp_path):
     assert "已存在" in again
 
 
-def test_resolve_tool_handler():
+async def test_resolve_tool_handler():
     from birdbench.web import resolve_tool_handler
 
-    md = resolve_tool_handler("Cooper's Hawk")
-    assert "coohaw" in md and "EXACT_COM" in md  # 逐阶 + 命中码
-    assert "输入一个鸟名" in resolve_tool_handler("")  # 空不崩
+    md = await resolve_tool_handler("Cooper's Hawk")  # 确定性命中(非真机→不调LLM)
+    assert "coohaw" in md and "EXACT_COM" in md
+    assert "输入一个鸟名" in await resolve_tool_handler("")  # 空不崩
+
+
+async def test_trace_shows_llm_extraction():
+    from birdbench.registry import load_registry
+    from birdbench.resolve import resolve_with_normalizer, trace_resolve
+
+    reg = load_registry()
+
+    async def fake_norm(_):
+        return "Victoria Crowned Pigeon"  # 模拟文字 LLM 清洗凌乱名
+
+    text = "A Victoria Crowned PigeoN"
+    outcome = await resolve_with_normalizer(text, reg, normalizer=fake_norm)
+    assert outcome.matched_species_code == "vicpig1"  # 提取后确定性解析出码
+    steps, _ = trace_resolve(text, reg, outcome=outcome)
+    llm = [s for s in steps if s["stage"] == "LLM_NORMALIZE"]
+    assert llm and "Victoria Crowned Pigeon" in llm[-1]["detail"]  # trace 显示提取出的名
 
 
 def test_leaderboard_handler(tmp_path):

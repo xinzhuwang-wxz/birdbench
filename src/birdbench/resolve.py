@@ -195,13 +195,18 @@ _LADDER = [
 
 
 def trace_resolve(
-    text: str, registry: Registry, gazetteer: Gazetteer | None = None
+    text: str,
+    registry: Registry,
+    gazetteer: Gazetteer | None = None,
+    outcome: ResolutionOutcome | None = None,
 ) -> tuple[list[dict], ResolutionOutcome]:
-    """解析梯子逐阶 trace（供 UI 透明展示）。以 resolve() 的 stage_fired 为权威，不重实现逻辑。
+    """解析梯子逐阶 trace（供 UI 透明展示）。以 stage_fired 为权威，不重实现逻辑。
 
+    outcome 可传入（如 resolve_with_normalizer 的结果，含 LLM 提取）；否则内部跑 resolve()。
     返回 (steps, outcome)。steps 每项 {stage, detail, result}：命中阶给出种码，之前的阶标未命中。
     """
-    outcome = resolve(text, registry, gazetteer)
+    if outcome is None:
+        outcome = resolve(text, registry, gazetteer)
     canon = _canon(text)
     fired = outcome.stage_fired
     steps: list[dict] = [{"stage": "NORMALIZE", "detail": f"{text!r} → 去符号/小写/去 sp.",
@@ -212,6 +217,10 @@ def trace_resolve(
             hit_base = next((b for b in bases if registry.exact_common(b)[0]
                              or registry.exact_scientific(b)[0]), canon)
             steps.append({"stage": st, "detail": f"剥修饰 → {hit_base!r}",
+                          "result": outcome.matched_species_code})
+            break
+        if st == "LLM_NORMALIZE" and st == fired:
+            steps.append({"stage": st, "detail": f"LLM 文字模型提取 → {outcome.parsed_canonical!r}",
                           "result": outcome.matched_species_code})
             break
         if st == fired:

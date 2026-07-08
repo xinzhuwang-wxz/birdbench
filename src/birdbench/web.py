@@ -13,7 +13,7 @@ from pathlib import Path
 from birdbench.core import identify
 from birdbench.gateway import FakeGateway, Gateway
 from birdbench.registry import Registry, load_registry
-from birdbench.resolve import Gazetteer, trace_resolve
+from birdbench.resolve import Gazetteer, resolve, resolve_with_normalizer, trace_resolve
 from birdbench.schemas import ModelSpec
 
 # 下拉：(展示标签含 tag, 实际 model_id)。tag 来自 111 图实测。
@@ -316,12 +316,40 @@ def save_prompt_handler(new_name, new_version, content, prompts_dir=None):
     return f"✓ 已存为新版本 {f.name}", prompt_choices(d)
 
 
-# ---- FE-5: 单名解析器工具 ----
-def resolve_tool_handler(name: str) -> str:
-    """任意鸟名 → 逐阶 trace + 最终码 + 科属种。复用 trace_resolve。"""
+# ---- FE-5: 单名解析器工具（含 LLM 文字提取，extractor 非 judge）----
+_EXTRACT_MODELS = [
+    ("doubao 文字（默认·凌乱名清洗）", "volcengine/doubao-seed-2-0-lite-260428"),
+    ("qwen-flash 文字", "dashscope/qwen3-vl-flash"),
+    ("不用 LLM（纯确定性）", ""),
+]
+
+
+def _build_normalizer(model_id: str):
+    """构造文字 LLM 归一化器(extractor)。空/非真机→None(不调 LLM)。只在确定性 miss 时被调，省钱。"""
+    if not model_id or os.environ.get("BIRDBENCH_REAL") != "1":
+        return None
+    from birdbench.gateway import LiteLLMGateway
+    from birdbench.llm_normalize import make_normalizer
+
+    params: dict = {"temperature": 0}
+    if "doubao" in model_id:
+        params["extra_body"] = {"thinking": {"type": "disabled"}}
+    prov = model_id.split("/")[0]
+    spec = ModelSpec(alias=model_id, model_id=model_id, provider=prov, params=params)
+    return make_normalizer(LiteLLMGateway([spec], price_overlay=_price_overlay()), spec)
+
+
+async def resolve_tool_handler(name: str, extract_model: str = _EXTRACT_MODELS[0][1]) -> str:
+    """任意鸟名 → 逐阶 trace + 最终码。凌乱名由文字 LLM 提取(只在确定性 miss 时调)。"""
     if not name or not name.strip():
         return "（输入一个鸟名，如 Cooper's Hawk / 北美红雀 / Cardinalis cardinalis）"
-    steps, outcome = trace_resolve(name.strip(), _registry(), _GZ)
+    reg, gz, text = _registry(), _GZ, name.strip()
+    norm = _build_normalizer(extract_model)
+    if norm is not None:
+        outcome = await resolve_with_normalizer(text, reg, gz, normalizer=norm)
+    else:
+        outcome = resolve(text, reg, gz)
+    steps, outcome = trace_resolve(text, reg, gz, outcome=outcome)
     lines = [f"**`{name}`** 逐阶解析：", "| 阶 | 动作 | 结果 |", "|---|---|---|"]
     for s in steps:
         r = s["result"] if s["result"] is not None else "—"
@@ -440,10 +468,13 @@ def build_app():
         with gr.Tab("解析器"):
             gr.Markdown("### 任意鸟名 → speciesCode（逐阶 trace）")
             rt_in = gr.Textbox(label="鸟名（俗名/学名/中文/带修饰）",
-                               placeholder="Cooper's Hawk")
+                               placeholder="A Victoria Crowned PigeoN")
+            rt_extract = gr.Dropdown(_EXTRACT_MODELS, value=_EXTRACT_MODELS[0][1],
+                                     label="提取模型（确定性解析不出时用它清洗凌乱名；仅真机生效）")
             rt_btn = gr.Button("解析", variant="primary")
             rt_out = gr.Markdown()
-            rt_btn.click(resolve_tool_handler, [rt_in], [rt_out], api_name="resolve_tool")
+            rt_btn.click(resolve_tool_handler, [rt_in, rt_extract], [rt_out],
+                         api_name="resolve_tool")
     return demo
 
 
