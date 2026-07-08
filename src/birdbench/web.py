@@ -109,16 +109,19 @@ def _trace_md(res) -> str:
 
 
 async def identify_handler(
-    image_path: str | None, model_id: str, temperature: float = 0.0, thinking: bool = False
+    image_path: str | None, model_id: str, temperature: float = 0.0, thinking: bool = False,
+    extract_model: str = "", prompt_version: str = "",
 ):
-    """图+模型+温度+thinking → (科属种卡片, top-k 表, 完整解析 trace)。异常都兜底，不崩。"""
+    """图+模型+温度+thinking+提取器+prompt → (卡片, top-k, 完整 trace)。异常都兜底，不崩。"""
     if not image_path:
         return "（请先上传一张鸟图）", [], ""
     try:
         gw, spec = _gateway(model_id, temperature, thinking)
         media = _MEDIA.get(Path(image_path).suffix.lower(), "image/jpeg")
         res = await identify(
-            Path(image_path).read_bytes(), spec, gateway=gw, registry=_registry(), media_type=media
+            Path(image_path).read_bytes(), spec, gateway=gw, registry=_registry(),
+            media_type=media, normalizer=_build_normalizer(extract_model),
+            prompt=_load_prompt_spec(prompt_version),
         )
     except Exception as e:  # noqa: BLE001
         return f"⚠️ 出错：{type(e).__name__}: {e}", [], ""
@@ -252,23 +255,30 @@ def _estimate_cost(specs, n_images: int) -> float:
     return total
 
 
-async def batch_run_handler(specs, n_images, confirm, cap):
-    """模型集 × 内置评测集前 N 图 → predictions。真机先估算+cap+确认闸；demo 恒免费。"""
+async def batch_run_handler(specs, n_images, confirm, cap, n_samples=1, prompt_version="",
+                            extract_model=""):
+    """模型集×前N图×prompt×采样数 → predictions。真机先估算+cap+确认闸；demo 恒免费。"""
     if not specs:
         return "（请先在上面「确认模型集」）", None
     from birdbench.bench import load_manifest, run_bench
 
     n = max(1, int(n_images))
+    ns = max(1, int(n_samples))
     items = load_manifest(_EVALSET)[:n]
     real = _is_real(specs)
     if real:
-        est = _estimate_cost(specs, len(items))
+        est = _estimate_cost(specs, len(items)) * ns  # 采样 N 次 → N 倍调用
         if est > float(cap):
-            return f"⚠️ 预计 ${est:.4f} > cap ${cap} → 未跑。减少图数/模型或提高 cap。", None
+            return f"⚠️ 预计 ${est:.4f} > cap ${cap} → 未跑。减少图数/模型/采样或提高 cap。", None
         if not confirm:
-            return f"预计 ${est:.4f}（{len(items)}图×{len(specs)}模型，真机）。勾确认再跑。", None
+            return f"预计 ${est:.4f}（{len(items)}图×{len(specs)}模型×{ns}采样）勾确认再跑", None
+    prompt = _load_prompt_spec(prompt_version)
     try:
-        recs = await run_bench(items, specs, gateway=_batch_gateway(specs), registry=_registry())
+        recs = await run_bench(
+            items, specs, prompts=[prompt] if prompt else None,
+            gateway=_batch_gateway(specs), registry=_registry(),
+            n_samples=ns, normalizer=_build_normalizer(extract_model),
+        )
     except Exception as e:  # noqa: BLE001
         return f"⚠️ 跑分出错：{type(e).__name__}: {e}", None
     cost = sum(r.cost_usd or 0 for r in recs)
@@ -285,6 +295,16 @@ def prompt_choices(prompts_dir=None) -> list[str]:
 
     d = Path(prompts_dir) if prompts_dir else _PROMPTS_DIR
     return [f"{p.name}.{p.version}" for p in list_prompts(d)]
+
+
+def _load_prompt_spec(name_version):
+    """选中的 name.version → PromptSpec（空 → None = 用默认 prompt，不硬编码）。"""
+    if not name_version:
+        return None
+    from birdbench.prompts import load_prompt_file
+
+    f = _PROMPTS_DIR / f"{name_version}.md"
+    return load_prompt_file(f) if f.exists() else None
 
 
 def load_prompt_handler(name_version, prompts_dir=None):
@@ -381,14 +401,18 @@ def build_app():
                                      label="温度 temperature（实测 0 最优）")
                     think = gr.Checkbox(value=False,
                                         label="thinking（仅 doubao；实测无益，默认关）")
+                    id_extract = gr.Dropdown(_EXTRACT_MODELS, value="",
+                                             label="提取模型（清洗凌乱输出；仅真机生效）")
+                    id_prompt = gr.Dropdown(prompt_choices(), value=None,
+                                            label="prompt 版本（空=默认）")
                     btn = gr.Button("识别", variant="primary")
             out_md = gr.Markdown(label="结果")
             headers = ["俗名", "rank_hint", "置信", "code"]
             out_tbl = gr.Dataframe(headers=headers, label="top-k 候选")
             with gr.Accordion("🔍 解析全过程（模型最初输出 → 提取 → 逐阶解析）", open=True):
                 out_trace = gr.Markdown()
-            btn.click(identify_handler, [img, model, temp, think], [out_md, out_tbl, out_trace],
-                      api_name="identify")
+            btn.click(identify_handler, [img, model, temp, think, id_extract, id_prompt],
+                      [out_md, out_tbl, out_trace], api_name="identify")
         with gr.Tab("排行榜"):
             gr.Markdown("### 📊 当前实测排行榜（n=111 图 × 5 模型，2026-07）")
             lb_png = _ASSETS / "leaderboard.png"
@@ -430,15 +454,21 @@ def build_app():
             mc_state = gr.State([])
             mc_btn.click(model_config_handler, [mc_select, mc_temp, mc_think, mc_custom],
                          [mc_table, mc_state], api_name="model_config")
-            gr.Markdown("### ② 跑分（内置 111 图评测集）")
+            gr.Markdown("### ② 跑分（内置 111 图评测集 · 可配 prompt / 采样数 / 提取器）")
             with gr.Row():
                 br_n = gr.Slider(1, 111, value=3, step=1, label="用前 N 张图")
+                br_samples = gr.Slider(1, 7, value=1, step=1, label="自洽采样数（>1 投票，V1-4）")
                 br_cap = gr.Number(value=1.0, label="成本上限 $（cap）")
+            with gr.Row():
+                br_prompt = gr.Dropdown(prompt_choices(), value=None, label="prompt 版本")
+                br_extract = gr.Dropdown(_EXTRACT_MODELS, value="",
+                                         label="提取模型（仅真机）")
                 br_confirm = gr.Checkbox(value=False, label="确认花费（真机批量需勾）")
             br_btn = gr.Button("开始跑分", variant="primary")
             br_status = gr.Markdown()
             br_preds = gr.State(None)
-            br_btn.click(batch_run_handler, [mc_state, br_n, br_cap, br_confirm],
+            br_btn.click(batch_run_handler,
+                         [mc_state, br_n, br_cap, br_confirm, br_samples, br_prompt, br_extract],
                          [br_status, br_preds], api_name="batch_run")
             gr.Markdown("### ③ 排行榜（跑完直出：显著性 + 校准 + 成本）")
             br_lb_btn = gr.Button("生成排行榜")

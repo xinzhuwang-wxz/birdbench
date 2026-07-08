@@ -111,6 +111,32 @@ async def test_batch_run_handler_no_specs():
     assert "确认模型集" in status and preds is None
 
 
+async def test_batch_run_n_samples_voting():
+    from birdbench.web import batch_run_handler, build_model_specs
+
+    specs = build_model_specs(["fake/demo"])
+    status, preds = await batch_run_handler(specs, 2, False, 1.0, n_samples=3)
+    assert preds is not None and len(preds) == 2  # 每图一条 consensus
+    assert preds[0].sample_idx == 3  # 自洽采样 3 次（后端 n_samples 未硬编码）
+
+
+def test_load_prompt_spec():
+    from birdbench.web import _load_prompt_spec
+
+    assert _load_prompt_spec("") is None  # 空 → 默认 prompt
+    p = _load_prompt_spec("species_id.v0")
+    assert p is not None and p.version == "v0"  # 指定版本可载入
+
+
+async def test_identify_handler_prompt_and_extract(tmp_path):
+    from birdbench.web import identify_handler
+
+    p = tmp_path / "b.jpg"
+    p.write_bytes(b"img")
+    md, tbl, trace = await identify_handler(str(p), "fake/demo", 0.0, False, "", "species_id.v0")
+    assert "Northern Cardinal" in md  # 指定 prompt + 提取器参数不破坏路径
+
+
 async def test_run_leaderboard_from_batch():
     from birdbench.web import batch_run_handler, build_model_specs, run_leaderboard_handler
 

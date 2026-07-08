@@ -133,9 +133,13 @@ async def identify(
     registry: Registry,
     gazetteer=None,
     media_type: str = "image/jpeg",
+    normalizer=None,
 ) -> IdentifyResult:
-    """图 → IdentifyResult（top-1 科属种 + top-k hedge + 解析透明度 + 成本）。产品端一等路径。"""
-    from birdbench.resolve import Gazetteer, resolve
+    """图 → IdentifyResult（top-1 科属种 + top-k hedge + 解析透明度 + 成本）。产品端一等路径。
+
+    normalizer（可选）：文字 LLM 提取器；确定性解析不出时清洗凌乱名（extractor 非 judge）。
+    """
+    from birdbench.resolve import Gazetteer, resolve, resolve_with_normalizer
 
     gz = gazetteer or Gazetteer()
     out = await predict(image, model, prompt, gateway=gateway, media_type=media_type)
@@ -158,7 +162,11 @@ async def identify(
 
     outcomes = []
     for c in pred.predictions:
-        ro = resolve(c.common_name or c.scientific_name or "", registry, gz)
+        name = c.common_name or c.scientific_name or ""
+        if normalizer is not None:
+            ro = await resolve_with_normalizer(name, registry, gz, normalizer=normalizer)
+        else:
+            ro = resolve(name, registry, gz)
         outcomes.append(ro)
         res.candidates.append(
             IdentifyCandidate(
