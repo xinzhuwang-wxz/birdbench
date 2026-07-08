@@ -73,6 +73,9 @@ def run_cmd(
     out: Path = typer.Option(Path("runs/predictions.jsonl"), "--out"),
     cache: Path = typer.Option(Path(".cache"), "--cache"),
     run_id: str = typer.Option("run", "--run-id"),
+    normalizer_model: str = typer.Option(
+        "", "--normalizer-model", help="轻量文字模型 id，启用 LLM 名字归一化尾巴（V1-8）"
+    ),
 ) -> None:
     """跑评测：manifest × models → predictions.jsonl。真机 LiteLLM（需 .env key）。"""
     from birdbench.bench import load_manifest, run_bench
@@ -82,6 +85,17 @@ def run_cmd(
     specs = [ModelSpec(**m) for m in json.loads(models_config.read_text())]
     reg = load_registry()
     items = load_manifest(manifest)
+    normalizer = None
+    if normalizer_model:
+        from birdbench.llm_normalize import make_normalizer
+
+        nspec = ModelSpec(
+            alias=normalizer_model,
+            model_id=normalizer_model,
+            provider=normalizer_model.split("/")[0],
+            params={"temperature": 0},
+        )
+        normalizer = make_normalizer(LiteLLMGateway([nspec]), nspec)
     recs = asyncio.run(
         run_bench(
             items,
@@ -92,6 +106,7 @@ def run_cmd(
             run_id=run_id,
             cache_dir=cache,
             out_path=out,
+            normalizer=normalizer,
         )
     )
     typer.echo(f"{len(recs)} cells → {out}")

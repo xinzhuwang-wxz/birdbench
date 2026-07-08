@@ -29,6 +29,7 @@ ResolutionStage = Literal[
     "ROLLUP_SSP",
     "CODE_ALIAS",
     "FUZZY_SCI",
+    "LLM_NORMALIZE",
     "EXTERNAL",
     "ABSTAIN",
 ]

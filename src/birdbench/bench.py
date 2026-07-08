@@ -14,7 +14,7 @@ from pathlib import Path
 from birdbench.core import default_prompt, parse_prediction, predict
 from birdbench.gateway import Gateway
 from birdbench.registry import Registry
-from birdbench.resolve import Gazetteer, resolve
+from birdbench.resolve import Gazetteer, NormalizerFn, resolve_with_normalizer
 from birdbench.schemas import (
     Candidate,
     GoldLabel,
@@ -86,6 +86,7 @@ async def run_cell(
     gazetteer: Gazetteer,
     run_id: str,
     cache_dir: Path | None = None,
+    normalizer: NormalizerFn | None = None,
 ) -> PredictionRecord:
     image = item.image_path.read_bytes()
     image_sha = hashlib.sha256(image).hexdigest()
@@ -126,7 +127,9 @@ async def run_cell(
     if pred and not abstained:
         for cand in pred.predictions:
             name = cand.common_name or cand.scientific_name or ""
-            outcomes.append(resolve(name, registry, gazetteer))
+            outcomes.append(
+                await resolve_with_normalizer(name, registry, gazetteer, normalizer=normalizer)
+            )
     resolved = [o.matched_species_code for o in outcomes]
 
     scores: dict = {}
@@ -181,6 +184,7 @@ async def sample_and_vote(
     run_id: str,
     n_samples: int,
     cache_dir: Path | None = None,
+    normalizer: NormalizerFn | None = None,
 ) -> PredictionRecord:
     """N 次采样 → 多数投票 consensus record（V1-4）。confidence=vote_fraction；语义熵进 scores。"""
     image = item.image_path.read_bytes()
@@ -215,7 +219,8 @@ async def sample_and_vote(
         if pred and not pred.abstain and pred.predictions:
             c0 = pred.predictions[0]
             nm = c0.common_name or c0.scientific_name or ""
-            code = resolve(nm, registry, gazetteer).matched_species_code
+            o = await resolve_with_normalizer(nm, registry, gazetteer, normalizer=normalizer)
+            code = o.matched_species_code
         resolved.append(code)
         cost_sum += cost or 0.0
         lat_sum += lat
@@ -254,6 +259,7 @@ async def run_bench(
     cache_dir: Path | None = None,
     out_path: Path | None = None,
     n_samples: int = 1,
+    normalizer: NormalizerFn | None = None,
 ) -> list[PredictionRecord]:
     """图×模型×prompt 笛卡尔 map-reduce（并发受 Semaphore 限）。out_path 写 predictions.jsonl。"""
     prompts = prompts or [default_prompt()]
@@ -267,10 +273,11 @@ async def run_bench(
                 return await sample_and_vote(
                     cell[0], cell[1], cell[2], gateway=gateway, registry=registry,
                     gazetteer=gz, run_id=run_id, n_samples=n_samples, cache_dir=cache_dir,
+                    normalizer=normalizer,
                 )
             return await run_cell(
                 cell[0], cell[1], cell[2], gateway=gateway, registry=registry,
-                gazetteer=gz, run_id=run_id, cache_dir=cache_dir,
+                gazetteer=gz, run_id=run_id, cache_dir=cache_dir, normalizer=normalizer,
             )
 
     records = await asyncio.gather(*[one(c) for c in cells])
