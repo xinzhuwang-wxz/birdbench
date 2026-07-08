@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "多模型多模态 API · 鸟类开集物种识别评测台"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "CC-BY-NC-4.0" }
 authors = [{ name = "xinzhuwang-wxz" }]
 dependencies = [
     "litellm>=1.0",          # 多供应商网关 + Router + per-call 成本
