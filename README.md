@@ -18,7 +18,7 @@
 
 ---
 
-## 🖥️ 前端（`birdbench web`，6 tab）
+## 🖥️ 前端（`birdbench web`，5 tab）
 
 ![web](docs/assets/ui_identify.png)
 
@@ -86,14 +86,14 @@ src/birdbench/
   self_consistency.py  投票 + 语义熵
   prompts.py       版本化 prompt（prompts/*.md，同事可编辑）
   schemas.py       所有 Pydantic 契约（Schema 铁律）
-  web.py           Gradio 6-tab   ·   cli.py  Typer
+  web.py           Gradio 5-tab   ·   cli.py  Typer
 data/taxonomy/     vendored bird-taxonomy 快照（pinned SHA）
 data/evalset/      111 图 manifest + images + ATTRIBUTION
 docs/              DESIGN / benchmark-design / v1-results / evalset / cost …
 configs/           models.json · doubao_price_overlay.json
 ```
 
-139+ 单测（`pytest`）+ CI；每个 handler 离线可测（FakeGateway）。
+137 单测（`pytest`）+ CI；每个 handler 离线可测（FakeGateway）。
 
 ---
 
