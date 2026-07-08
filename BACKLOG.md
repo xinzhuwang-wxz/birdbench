@@ -1,5 +1,7 @@
 # BACKLOG — birdbench v0（= GitHub issues S0–S11）
 
+> **状态**：v0(S0–S11) + v1 均已完成（S12 prompt 注册表、Gradio Web、统计/校准/自洽、LLM 归一化提取器均已落地）。本文为历史 backlog；最新结果见 [`docs/v1-results-111.md`](docs/v1-results-111.md)。
+
 依赖序垂直切片。每片：小、可独立测、TDD 红→绿→eval 闸门。规格见 `docs/DESIGN.md`。
 标签：`ready-for-agent`（纯代码、离线 fake 可测）/ `ready-for-human`（授权/密钥/数据/license）。
 

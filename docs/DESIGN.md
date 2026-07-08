@@ -28,10 +28,10 @@
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `data/species.jsonl` | 11,167 种；`ebird_code · sci_name · genus · family_sci · family_code · order · taxon_order` | **身份真源**；科属种 join |
+| `data/taxonomy/species.jsonl` | 11,167 种；`ebird_code · sci_name · genus · family_sci · family_code · order · taxon_order` | **身份真源**；科属种 join |
 | `raw/ebird_taxonomy.<date>.jsonl` | 17,891 taxa；含 `speciesCode · comName · sciName · com/sciNameCodes` | **解析主索引**（俗名/学名/缩写码 → code） |
-| `data/rollup.jsonl` | 4,120；`ebird_code(细) → reports_as_ebird_code(种)` | 亚种/issf/form → 种收敛 |
-| `data/avibase_map.jsonl` | 8,785；`ebird_code → avibase_id` | 概念锚（同义构建辅助，非直接名→码） |
+| `data/taxonomy/rollup.jsonl` | 4,120；`ebird_code(细) → reports_as_ebird_code(种)` | 亚种/issf/form → 种收敛 |
+| `data/taxonomy/avibase_map.jsonl` | 8,785；`ebird_code → avibase_id` | 概念锚（同义构建辅助，非直接名→码） |
 
 > `ebird_code` 是**不透明主键**——不许解析它的字符（尾数字是 eBird 的碰撞消歧，非分类学信息）。要 rank 读 `genus`/`family_sci`/`order` 列。
 
@@ -85,14 +85,19 @@
 | 3 | 精确英文俗名 | EXACT_COM | 0.99 | 多义(`ambiguous`) → 弃答 |
 | 3z | 精确**中文**俗名（V0，测中文模型必需）| ZH_ALIAS | 0.98 | zh→code 别名表(建自 Wikidata/Avibase zh 标签，并入 S4)；多义→弃答 |
 | 4 | 同义/属重分类 gazetteer | SYNONYM | 0.97 | 仅唯一命中一个种码 |
-| 5 | 受限模糊(rapidfuzz) | FUZZY_SCI | 0.80–0.90 | **属 token 精确**；仅模糊种加词；JW≥0.92 且 edit≤2 且 与次候选 margin≥0.05；**绝不模糊俗名** |
+| 4b | 剥修饰(括号/morph/albino/domestic…)回退 base 名 | MODIFIER_STRIP | 0.90 | **V1-1**；恢复被修饰词冤枉的对答案 |
+| 5a | 三名制去亚种 → 二名 | ROLLUP_SSP | 0.95 | 三名 → 二名 → 种 |
+| 5b | 受限模糊(rapidfuzz) | FUZZY_SCI | 0.80–0.90 | **属 token 精确**；仅模糊种加词；JW≥0.92 且 edit≤2 且 与次候选 margin≥0.05；**绝不模糊俗名** |
 | 6 | 4 字母缩写码(com/sciNameCodes)| CODE_ALIAS | 0.70 | **降级：唯一命中才认**（`CACA`→21 种，多义即跳过）|
-| 7 | (V1)在线 GBIF/GNverifier 兜底 | EXTERNAL | ≤0.85 | 缓存+超时；仅 EXACT+SPECIES；结果再过 2/4 阶落码 |
+| 6b | 文字 LLM 提取干净种名(**extractor 非 judge**) | LLM_NORMALIZE | 0.85 | **V1-8**；仅确定性 miss 时可选调；擦完仍走确定性 exact；对错仍 code==gold |
+| 7 | (V1)在线 GBIF/GNverifier 兜底 | EXTERNAL | ≤0.85 | **schema 已占位，代码未实现**；缓存+超时；仅 EXACT+SPECIES |
 | 8 | 弃答 | ABSTAIN | — | 一等结局，记原文+被拒候选+原因；**绝不静默给错码** |
 
 > 每次解析出 code 后**一律跑 rollup 后处理**（上）收敛到种。**V0 = 阶 0–6**（含 zh、gazetteer、CODE_ALIAS）；EXTERNAL = V1。
 
-**复用 vs 自搓**：gnparser(MIT)、rapidfuzz(MIT) 直接装；**当前 `speciesCode` 映射必须本地自持**（外部服务的 eBird 源冻结在 v2019，认不了 Accipiter→Astur 这类新变更）；GBIF/GN/Avibase/Wikidata **离线**用来 build gazetteer，不在运行时热路径；**LLM-as-judge 判等价踢出解析路径**（自我偏袒虚高 10–25%），仅离线扩 gazetteer + 人审。
+> 阶 0 NORMALIZE 目前用**自写轻量归一化** `_canon`（小写 + 去标点 + 去 "sp." + 压空白），**gnparser 未接入**（可选增强）。rapidfuzz(MIT) 已用于 FUZZY_SCI。
+
+**复用 vs 自搓**：rapidfuzz(MIT) 直接装；**当前 `speciesCode` 映射必须本地自持**（外部服务的 eBird 源冻结在 v2019，认不了 Accipiter→Astur 这类新变更）；GBIF/GN/Avibase/Wikidata **离线**用来 build gazetteer，不在运行时热路径。**LLM 只当 extractor 不当 judge**：`LLM_NORMALIZE` 阶允许轻量文字模型把凌乱名擦干净（仅确定性 miss 时），但**打分永远确定性 code==gold**——绝不让 LLM 判等价（自我偏袒虚高 10–25%）。
 
 ### 5.3 打分（`score.py`，= eval 闸门）
 真值 gold code = t，预测解析码 = p。
@@ -115,7 +120,7 @@
 - **非物种名**（slash/spuh/hybrid 等，解析不到种码）→ 归 **D（弃答）**，不计入 C（既非解析器漏洞、也非模型幻觉）。
 - `ResolutionOutcome.resolution_bucket` 字段（A/B/C1/C2/D）在打分时填，是四桶的落点；`ambiguous=true` 的多义弃答也归 D。
 
-### 5.4 模型访问层（`gateway.py` / `structured.py`）
+### 5.4 模型访问层（`gateway.py` / `core.py`）
 - **复用 LiteLLM**（2025-26 多供应商事实标准），但评测台补两处：
   - **`litellm.Router`**（每 deployment rpm/tpm/max_parallel/cooldown/fallback）——高并发打多家必需。
   - **自维护价格表 `litellm.register_model(...)`**——豆包/Qwen-VL max·plus·2.5-vl/LongCat/部分 Kimi **无内置价，`completion_cost` 返回 None**；否则 `cost_usd` 一直是 None、成本按天花板高估。
@@ -123,33 +128,28 @@
 - **system 传纯字符串**（豆包火山方舟硬约束）。
 - **结构化 mode per-model**：默认 `TOOLS`/`JSON_SCHEMA`；LongCat / Qwen-`-thinking` / 不确定家降级 **`MD_JSON`**；**永不给 Qwen-thinking 发 json_schema**；Gemini 视觉+结构化走原生 `response_schema`。
 - **供应链**：pin 依赖版本 + hash（LiteLLM 曾被投毒）。
-- **能力声明 + 优雅跳过**：`models.toml` 标 `supports_vision`/`supports_json_schema`；不支持 vision 的模型 runner **跳过该 cell 记 error**，不崩整轮（per-cell 隔离）。
+- **能力声明 + 优雅跳过**：`configs/models.json` 标 `supports_vision`/`supports_json_schema`；不支持 vision 的模型 runner **跳过该 cell 记 error**，不崩整轮（per-cell 隔离）。
 - **结构化解码兜底策略**：Instructor 解码失败 → 同 mode 重试 1 次 → 降级 `MD_JSON` 重试 → 仍失败则记 `schema_valid=False` 移动（`attempt` 计数），绝不卡整轮。
 - **钉快照**：记录 API 实际返回的 `response.model` 进 `PredictionRecord.model_resolved`（`gpt-4o` 等 alias 会漂移，跨月对比需真实版本）。
 
-**模型注册表（一家可测多模型 — 一等概念）**：评测单元是**模型条目**，不是"家"。一个 provider 下可挂**任意多个模型，共享同一把 API key**（key 是 per-provider，模型是 per-entry）。用一份 `models.toml` 注册：
-```toml
-[[model]]                        # 同一家可有多条
-alias = "gpt-4o"
-litellm = "openai/gpt-4o"        # LiteLLM id（前缀 = 路由到哪家）
-provider = "openai"              # 决定用哪把 key + 限流组
-[model.params]
-temperature = 0
-max_tokens = 1024
-structured_mode = "json_schema"  # per-model：TOOLS|JSON_SCHEMA|JSON_OBJECT|MD_JSON
-
-[[model]]
-alias = "gpt-4.1-mini"
-litellm = "openai/gpt-4.1-mini"
-provider = "openai"              # 同家、共用 OPENAI_API_KEY
-
-[[model]]
-alias = "qwen3-vl-plus"
-litellm = "dashscope/qwen3-vl-plus"
-provider = "dashscope"
-[model.params]
-structured_mode = "json_object"  # 非 thinking 版
+**模型注册表（一家可测多模型 — 一等概念）**：评测单元是**模型条目**，不是"家"。一个 provider 下可挂**任意多个模型，共享同一把 API key**（key 是 per-provider，模型是 per-entry）。用一份 `configs/models.json` 注册：
+```json
+[
+  { "alias": "doubao-lite-nothink",
+    "model_id": "volcengine/doubao-seed-2-0-lite-260428",
+    "provider": "volcengine",
+    "params": { "temperature": 0, "extra_body": { "thinking": { "type": "disabled" } } } },
+  { "alias": "qwen3-vl-plus",
+    "model_id": "dashscope/qwen3-vl-plus",
+    "provider": "dashscope",
+    "params": { "temperature": 0 } },
+  { "alias": "qwen3-vl-flash",
+    "model_id": "dashscope/qwen3-vl-flash",
+    "provider": "dashscope",
+    "params": { "temperature": 0 } }
+]
 ```
+（字段：`alias` / `model_id`(LiteLLM id，前缀=路由到哪家) / `provider`(决定用哪把 key) / `params`(温度·thinking·structured_mode…)。同一家可多条共享一把 key。）
 - `Router.model_list` 从注册表构建：**每条 = 一个 deployment**，带各自 rpm/tpm/structured_mode/价格 overlay。
 - `ModelSpec`（schema）= 一个模型条目；一次 run 携带 `list[ModelSpec]`，**可含同家多条**。
 - CLI `--models gpt-4o,gpt-4.1-mini,qwen3-vl-plus` 按 **alias** 选子集；榜按 **alias** 排行（不是按 provider）；`cost_usd`/延迟/准确率**逐模型**统计。
