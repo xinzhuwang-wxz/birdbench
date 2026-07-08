@@ -15,8 +15,17 @@ from birdbench.core import default_prompt, parse_prediction, predict
 from birdbench.gateway import Gateway
 from birdbench.registry import Registry
 from birdbench.resolve import Gazetteer, resolve
-from birdbench.schemas import GoldLabel, ModelSpec, PredictionRecord, PromptSpec, Usage
+from birdbench.schemas import (
+    Candidate,
+    GoldLabel,
+    ModelSpec,
+    PredictionRecord,
+    PromptSpec,
+    SpeciesPrediction,
+    Usage,
+)
 from birdbench.score import score_item
+from birdbench.self_consistency import aggregate_samples
 
 _MEDIA = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 
@@ -161,6 +170,77 @@ async def run_cell(
     )
 
 
+async def sample_and_vote(
+    item: Item,
+    model: ModelSpec,
+    prompt: PromptSpec,
+    *,
+    gateway: Gateway,
+    registry: Registry,
+    gazetteer: Gazetteer,
+    run_id: str,
+    n_samples: int,
+    cache_dir: Path | None = None,
+) -> PredictionRecord:
+    """N 次采样 → 多数投票 consensus record（V1-4）。confidence=vote_fraction；语义熵进 scores。"""
+    image = item.image_path.read_bytes()
+    image_sha = hashlib.sha256(image).hexdigest()
+    cid = cell_id(image_sha, model, prompt)
+    resolved: list[str | None] = []
+    cost_sum, lat_sum, tok_sum, mres, all_cached = 0.0, 0.0, 0, "", True
+    for idx in range(n_samples):
+        cf = (cache_dir / f"{cid}-s{idx}.json") if cache_dir else None
+        if cf and cf.exists():
+            c = json.loads(cf.read_text())
+            raw, cost, lat, tok, mr = (
+                c["raw_output"], c["cost_usd"], c["latency_ms"], c["tokens"], c["model_resolved"]
+            )
+        else:
+            all_cached = False
+            out = await predict(
+                image, model, prompt, gateway=gateway, media_type=_media(item.image_path)
+            )
+            r = out.response
+            raw, cost, lat, tok, mr = (
+                out.raw_output, r.cost_usd, r.latency_ms, r.usage.total_tokens, r.model_resolved
+            )
+            if cf:
+                cf.parent.mkdir(parents=True, exist_ok=True)
+                cf.write_text(json.dumps({
+                    "raw_output": raw, "cost_usd": cost, "latency_ms": lat,
+                    "tokens": tok, "model_resolved": mr,
+                }))
+        pred = parse_prediction(raw)
+        code = None
+        if pred and not pred.abstain and pred.predictions:
+            c0 = pred.predictions[0]
+            nm = c0.common_name or c0.scientific_name or ""
+            code = resolve(nm, registry, gazetteer).matched_species_code
+        resolved.append(code)
+        cost_sum += cost or 0.0
+        lat_sum += lat
+        tok_sum += tok
+        mres = mr
+
+    vote_top1, vote_fraction, sem_ent = aggregate_samples(resolved)
+    scores: dict = {"vote_fraction": vote_fraction, "semantic_entropy": sem_ent}
+    if item.gold.species_code:
+        s = score_item(item.gold.species_code, [vote_top1], abstained=False, reg=registry)
+        scores.update({"bucket": s.bucket, "top1": s.top1_correct, "top3": s.top3_correct,
+                       "top5": s.top5_correct, "genus": s.genus_correct,
+                       "family": s.family_correct, "order": s.order_correct, "lca": s.lca})
+    cands = [Candidate(common_name=vote_top1, confidence=vote_fraction)] if vote_top1 else []
+    return PredictionRecord(
+        run_id=run_id, cell_id=cid, item_id=item.item_id, model_alias=model.alias,
+        prompt_version=prompt.version, prompt_hash=prompt.content_hash, sample_idx=n_samples,
+        image_sha256=image_sha, gold=item.gold,
+        prediction=SpeciesPrediction(predictions=cands, overall_confidence=vote_fraction),
+        schema_valid=True, scores=scores, latency_ms=lat_sum,
+        usage=Usage(total_tokens=tok_sum), cost_usd=(cost_sum or None),
+        model_resolved=mres, cache_hit=all_cached,
+    )
+
+
 async def run_bench(
     items: list[Item],
     models: list[ModelSpec],
@@ -173,6 +253,7 @@ async def run_bench(
     concurrency: int = 8,
     cache_dir: Path | None = None,
     out_path: Path | None = None,
+    n_samples: int = 1,
 ) -> list[PredictionRecord]:
     """图×模型×prompt 笛卡尔 map-reduce（并发受 Semaphore 限）。out_path 写 predictions.jsonl。"""
     prompts = prompts or [default_prompt()]
@@ -182,6 +263,11 @@ async def run_bench(
 
     async def one(cell):
         async with sem:
+            if n_samples > 1:
+                return await sample_and_vote(
+                    cell[0], cell[1], cell[2], gateway=gateway, registry=registry,
+                    gazetteer=gz, run_id=run_id, n_samples=n_samples, cache_dir=cache_dir,
+                )
             return await run_cell(
                 cell[0], cell[1], cell[2], gateway=gateway, registry=registry,
                 gazetteer=gz, run_id=run_id, cache_dir=cache_dir,

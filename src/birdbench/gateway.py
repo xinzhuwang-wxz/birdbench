@@ -43,12 +43,19 @@ class Gateway(Protocol):
 class FakeGateway:
     """离线 fake：按 model alias 返回预置文本，不碰网络。测试 + 降级用。"""
 
-    def __init__(self, responses: dict[str, str] | None = None, default: str = "{}") -> None:
-        self._responses = responses or {}
+    def __init__(self, responses: dict | None = None, default: str = "{}") -> None:
+        self._responses = responses or {}  # value: str 或 list（list 循环取,模拟采样）
         self._default = default
+        self._calls: dict[str, int] = {}
 
     async def complete(self, messages: list[dict], spec: ModelSpec) -> ModelResponse:
-        text = self._responses.get(spec.alias, self._default)
+        v = self._responses.get(spec.alias, self._default)
+        if isinstance(v, list):
+            i = self._calls.get(spec.alias, 0)
+            self._calls[spec.alias] = i + 1
+            text = v[i % len(v)] if v else self._default
+        else:
+            text = v
         return ModelResponse(
             text=text,
             usage=Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15),

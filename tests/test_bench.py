@@ -62,6 +62,28 @@ async def test_call_cache_hit_on_rerun(tmp_path):
     assert all(r.cache_hit for r in r2)  # 第二次全命中缓存（重跑免费）
 
 
+async def test_run_bench_n_samples_voting(tmp_path):
+    # 3 次采样：2 票 Cooper's Hawk + 1 票 Sharp-shinned → 多数投票 coohaw（V1-4）
+    (tmp_path / "a.jpg").write_bytes(b"img-a")
+    m = tmp_path / "m.jsonl"
+    m.write_text(json.dumps({"id": "i1", "image": "a.jpg", "truth": "coohaw"}) + "\n")
+    items = load_manifest(m)
+
+    def resp(name):
+        preds = [{"common_name": name, "confidence": 0.9}]
+        return json.dumps({"predictions": preds, "abstain": False})
+
+    seq = [resp("Cooper's Hawk"), resp("Cooper's Hawk"), resp("Sharp-shinned Hawk")]
+    gw = FakeGateway(responses={"fake": seq})
+    recs = await run_bench(items, [_SPEC], gateway=gw, registry=REG, run_id="v", n_samples=3)
+    r = recs[0]
+    assert r.sample_idx == 3
+    assert abs(r.scores["vote_fraction"] - 2 / 3) < 1e-9  # 2/3 投 coohaw
+    assert r.scores["top1"] is True  # vote_top1 == gold
+    assert r.scores["semantic_entropy"] > 0  # 有分歧
+    assert r.prediction.overall_confidence == r.scores["vote_fraction"]
+
+
 def test_cell_id_stable_and_dimension_sensitive():
     p = default_prompt()
     m1 = ModelSpec(alias="a", model_id="p/x", provider="p")
