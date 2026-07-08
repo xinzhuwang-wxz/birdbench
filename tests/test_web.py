@@ -64,6 +64,38 @@ def test_gateway_temperature_and_thinking_wiring():
     assert "extra_body" not in spec.params  # 非 doubao 无 thinking 字段
 
 
+def test_build_model_specs():
+    from birdbench.web import build_model_specs
+
+    specs = build_model_specs(
+        ["dashscope/qwen3-vl-flash", "volcengine/doubao-seed-2-0-lite-260428"],
+        temperature=0.3, thinking=True,
+    )
+    assert len(specs) == 2
+    assert specs[0].params["temperature"] == 0.3
+    assert "extra_body" not in specs[0].params  # qwen 无 thinking
+    assert specs[1].params["extra_body"]["thinking"]["type"] == "enabled"  # doubao 开
+
+
+def test_build_model_specs_custom_dedup_and_empty():
+    from birdbench.web import build_model_specs
+
+    specs = build_model_specs(["a/b"], custom="a/b\nc/d\n\n")
+    assert [s.model_id for s in specs] == ["a/b", "c/d"]  # 去重 + 跳空行
+    assert build_model_specs(None) == []  # 空不崩
+
+
+def test_model_config_handler_returns_rows_and_state():
+    from birdbench.web import model_config_handler
+
+    rows, state = model_config_handler(
+        ["volcengine/doubao-seed-2-0-lite-260428"], 0.0, False, ""
+    )
+    assert rows[0][0] == "volcengine/doubao-seed-2-0-lite-260428"
+    assert rows[0][2] == "disabled"  # doubao thinking 关
+    assert len(state) == 1  # State 存了 specs
+
+
 def test_leaderboard_handler(tmp_path):
     f = tmp_path / "p.jsonl"
     f.write_text(sample_predictions_jsonl())

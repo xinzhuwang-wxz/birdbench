@@ -166,6 +166,44 @@ def _calib(recs) -> dict:
     return {m: model_calibration(ps) for m, ps in pairs_by_model(recs).items()}
 
 
+# ---- FE-1: 模型配置 ----
+_KNOWN_MODELS = [
+    ("qwen3-vl-flash 💰 最便宜", "dashscope/qwen3-vl-flash"),
+    ("qwen3-vl-plus", "dashscope/qwen3-vl-plus"),
+    ("doubao-lite 🏆 最准", "volcengine/doubao-seed-2-0-lite-260428"),
+    ("fake/demo（免费）", "fake/demo"),
+]
+
+
+def build_model_specs(
+    selected: list[str] | None, temperature: float = 0.0, thinking: bool = False, custom: str = ""
+) -> list[ModelSpec]:
+    """选中 model_id + 自定义(每行一个) → list[ModelSpec]。会话态不落库；去重，空/非法跳过。"""
+    ids: list[str] = []
+    for raw in list(selected or []) + (custom or "").splitlines():
+        mid = raw.strip()
+        if mid and mid not in ids:
+            ids.append(mid)
+    specs = []
+    for mid in ids:
+        params: dict = {"temperature": float(temperature)}
+        if "doubao" in mid:
+            params["extra_body"] = {"thinking": {"type": "enabled" if thinking else "disabled"}}
+        specs.append(ModelSpec(alias=mid, model_id=mid, provider=mid.split("/")[0], params=params))
+    return specs
+
+
+def model_config_handler(selected, temperature, thinking, custom):
+    """UI 值 → (摘要表 rows, specs 存 State)。"""
+    specs = build_model_specs(selected, temperature, thinking, custom)
+    rows = [
+        [s.alias, s.params.get("temperature"),
+         s.params.get("extra_body", {}).get("thinking", {}).get("type", "—")]
+        for s in specs
+    ]
+    return rows, specs
+
+
 def build_app():
     import gradio as gr
 
@@ -218,6 +256,20 @@ def build_app():
             lb_btn = gr.Button("生成排行榜", variant="primary")
             lb_html = gr.HTML()
             lb_btn.click(leaderboard_handler, [pred], [lb_html], api_name="leaderboard")
+        with gr.Tab("批量评测"):
+            gr.Markdown("### ① 模型配置（选哪些模型测 + 参数）")
+            mc_select = gr.CheckboxGroup(_KNOWN_MODELS, label="选择模型",
+                                         value=["dashscope/qwen3-vl-flash"])
+            with gr.Row():
+                mc_temp = gr.Slider(0.0, 1.0, value=0.0, step=0.1, label="温度（应用到所有选中）")
+                mc_think = gr.Checkbox(value=False, label="thinking（仅 doubao）")
+            mc_custom = gr.Textbox(label="自定义 model_id（每行一个，litellm 格式）", lines=2)
+            mc_btn = gr.Button("确认模型集", variant="primary")
+            mc_table = gr.Dataframe(headers=["alias", "温度", "thinking"], label="已配置模型集")
+            mc_state = gr.State([])
+            mc_btn.click(model_config_handler, [mc_select, mc_temp, mc_think, mc_custom],
+                         [mc_table, mc_state], api_name="model_config")
+            gr.Markdown("_（跑分执行 + 直出榜见 FE-2/FE-3，开发中）_")
     return demo
 
 
