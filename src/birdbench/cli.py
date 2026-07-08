@@ -97,6 +97,14 @@ def run_cmd(
     typer.echo(f"{len(recs)} cells → {out}")
 
 
+@app.command("web")
+def web_cmd() -> None:
+    """启动 Gradio Web 壳（产品端拖拽台）。默认 demo(不花钱)；BIRDBENCH_REAL=1 真机。"""
+    from birdbench.web import main
+
+    main()
+
+
 @app.command("identify")
 def identify_cmd(
     image: Path,
