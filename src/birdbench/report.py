@@ -135,7 +135,32 @@ _COLS = [
 ]
 
 
-def render_html(rows: list[LeaderboardRow], *, title: str = "birdbench leaderboard") -> str:
+def _calibration_html(calibration: dict[str, dict[str, float]]) -> str:
+    if not calibration:
+        return ""
+    cols = ["model", "AUROC_f", "Brier", "过度自信gap", "E-AURC", "sel@50", "sel@80"]
+    head = "".join(f"<th>{html.escape(c)}</th>" for c in cols)
+    body = ""
+    for alias, m in calibration.items():
+        body += (
+            f"<tr><td>{html.escape(alias)}</td><td>{m['auroc_f']:.3f}</td>"
+            f"<td>{m['brier']:.3f}</td><td>{m['overconf_gap']:+.3f}</td>"
+            f"<td>{m['e_aurc']:.3f}</td><td>{m['sel_acc_50']:.3f}</td>"
+            f"<td>{m['sel_acc_80']:.3f}</td></tr>"
+        )
+    return (
+        "<h2>校准 / 选择性分类</h2><p>AUROC_f=置信能否分开对/错(0.5=瞎猜)；"
+        "过度自信gap 正=高估；E-AURC 越低=排序越好。口头置信度为基线，V1-4 自洽投票率更可靠。</p>"
+        f"<table><tr>{head}</tr>{body}</table>"
+    )
+
+
+def render_html(
+    rows: list[LeaderboardRow],
+    *,
+    title: str = "birdbench leaderboard",
+    calibration: dict[str, dict[str, float]] | None = None,
+) -> str:
     def cell(r: LeaderboardRow, key: str) -> str:
         v = getattr(r, key)
         if key == "model_alias":
@@ -166,6 +191,7 @@ def render_html(rows: list[LeaderboardRow], *, title: str = "birdbench leaderboa
         f"<h1>{html.escape(title)}</h1>"
         f"<h2>成本 × 准确率 (Pareto)</h2>{_pareto_svg(rows)}"
         f"<h2>Leaderboard（按端到端准确率）</h2>{note}<table><tr>{head}</tr>{body}</table>"
+        + _calibration_html(calibration or {})
     )
 
 
@@ -189,9 +215,12 @@ def write_report(records: list[PredictionRecord], out_path: str | Path) -> list[
     tied = compute_significance(records, rows)
     for r in rows:
         r.tied_with_best = r.model_alias in tied
+    from birdbench.calibration import model_calibration, pairs_by_model
+
+    calib = {m: model_calibration(ps) for m, ps in pairs_by_model(records).items()}
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(render_html(rows))
+    p.write_text(render_html(rows, calibration=calib))
     (p.parent / "leaderboard.json").write_text(
         json.dumps([r.model_dump() for r in rows], ensure_ascii=False, indent=2)
     )
